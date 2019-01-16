@@ -14,6 +14,7 @@ import (
 	// EXTENSIONS: Add extension imports here or use `fn build-server`. Learn more: https://github.com/fnproject/fn/blob/master/docs/operating/extending.md
 
 	_ "github.com/fnproject/fn/api/server/defaultexts"
+    _ "git.esentri.com/fn/ext-zeebe/zeebe"
 )
 
 func main() {
@@ -21,6 +22,7 @@ func main() {
 	registerViews()
 
 	funcServer := server.NewFromEnv(ctx)
+	funcServer.AddExtensionByName("git.esentri.com/fn/ext-zeebe/zeebe")
 	funcServer.Start(ctx)
 }
 
