@@ -1,6 +1,20 @@
 <a id="top"></a>
 ![Fn Project](http://fnproject.io/images/fn-300x125.png)
 
+## Extension Prototyp
+* Dies ist eine Kopie von dem GitHub-Projekt "fnproject/fn": https://github.com/fnproject/fn
+* Folgende Punkte sind persönliche Notizen:
+  * vi ist nicht super geeignet für das Arbeiten mit Markdown
+  * fnserver inkl. Extension mit Docker bauen: docker build -t artunsubasi/fnserver-experiment .
+  * fnserver Starten: docker run --rm -i --name fnserver -v /Users/artunsubasi/.fn/iofs:/iofs -e FN_LOG_LEVEL=INFO -e FN_IOFS_DOCKER_PATH=/Users/artunsubasi/.fn/iofs -e FN_IOFS_PATH=/iofs -v /Users/artunsubasi/.fn/data:/app/data -v /var/run/docker.sock:/var/run/docker.sock -p 8080:8080 artunsubasi/fnserver-experiment
+
+### Merker
+* fnserver lässt sich unter MacOS nicht nativ starten. Siehe Slack-Chat: https://fnproject.slack.com/archives/C6FL02Q02/p1547646705082200
+* Der normale Weg, um den fnserver mit einem Plug-in zu bauen, ist über das Fn CLI vorgesehen, funktioniert aber nur mit öffentlichen Git-Repositories
+* Lösungen:
+  * Wie oben beschrieben mit Docker bauen und starten
+  * Eine Linux-Umgebung für die Entwicklung einrichten (nativ, vm, docker...)
+
 **[Quickstart](https://github.com/fnproject/fn#quickstart)&nbsp; | &nbsp;[Tutorials](https://fnproject.io/tutorials)&nbsp; |  &nbsp;[Docs](https://github.com/fnproject/docs)&nbsp; | &nbsp;[API](http://petstore.swagger.io/?url=https://raw.githubusercontent.com/fnproject/fn/master/docs/swagger_v2.yml)&nbsp; | &nbsp;[Operating](https://github.com/fnproject/docs/blob/master/fn/README.md#for-operators)&nbsp; | &nbsp;[Flow](https://github.com/fnproject/flow)&nbsp; | &nbsp;[UI](https://github.com/fnproject/ui)**
 
 [![CircleCI](https://circleci.com/gh/fnproject/fn.svg?style=svg&circle-token=6a62ac329bc5b68b484157fbe88df7612ffd9ea0)](https://circleci.com/gh/fnproject/fn) [![GoDoc](https://godoc.org/github.com/fnproject/fn?status.svg)](https://godoc.org/github.com/fnproject/fn)
