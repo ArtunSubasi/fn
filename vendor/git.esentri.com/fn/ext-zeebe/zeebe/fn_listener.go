@@ -7,40 +7,26 @@ import (
 	"github.com/fnproject/fn/api/models"
 )
 
+// Function listener for the Zeebe extension implementing the next.FnListener interface
+// Listens to the function create, update and delete events and delegates them to the Zeebe adapter
 type FnListener struct {
-	jobWorker *JobWorker
+	zeebeAdapter *ZeebeAdapter
 }
 
 func NewFnListener() FnListener {
 	f := FnListener{}
-	f.jobWorker = &JobWorker{}
+	f.zeebeAdapter = &ZeebeAdapter{}
 	return f
 }
 
 func (a *FnListener) BeforeFnCreate(ctx context.Context, fn *models.Fn) error {
 	fmt.Println("ZEEBE! BeforeFnCreate")
-	fmt.Printf("Function: %v\n", fn)
 	return nil
 }
 
 func (a *FnListener) AfterFnCreate(ctx context.Context, fn *models.Fn) error {
 	fmt.Println("ZEEBE! AfterFnCreate")
-	fmt.Println("Config:")
-
-    for key, val := range fn.Config {
-		s := fmt.Sprintf("%s=\"%s\"", key, val)
-        fmt.Println(s)
-	}
-		
-	fmt.Println("Annotations:")
-	for key, val := range fn.Annotations {
-		s := fmt.Sprintf("%s=\"%s\"", key, val)
-        fmt.Println(s)
-	}
-
-	// TODO this must be started using goroutines and probably synchronized and stopped using channels
-	a.jobWorker.Work()
-
+	a.zeebeAdapter.RegisterFunctionAsWorker()
 	return nil
 }
 
@@ -51,14 +37,14 @@ func (a *FnListener) BeforeFnUpdate(ctx context.Context, fn *models.Fn) error {
 
 func (a *FnListener) AfterFnUpdate(ctx context.Context, fn *models.Fn) error {
 	fmt.Println("ZEEBE! AfterFnUpdate")
-	a.jobWorker.Stop()
-	a.jobWorker.Work()
+	a.zeebeAdapter.UnregisterFunctionAsWorker()
+	a.zeebeAdapter.RegisterFunctionAsWorker()
 	return nil
 }
 
 func (a *FnListener) BeforeFnDelete(ctx context.Context, fnID string) error {
 	fmt.Println("ZEEBE! BeforeFnDelete")
-	a.jobWorker.Stop()
+	a.zeebeAdapter.UnregisterFunctionAsWorker()
 	return nil
 }
 

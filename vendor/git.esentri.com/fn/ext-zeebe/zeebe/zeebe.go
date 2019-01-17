@@ -6,6 +6,7 @@ import (
 	"github.com/fnproject/fn/fnext"
 )
 
+// Extension for Zeebe integration
 func init() {
 	server.RegisterExtension(&Zeebe{})
 }
