@@ -1,0 +1,85 @@
+{
+  "index_patterns": [
+    "zeebe-record-job-batch_*"
+  ],
+  "order": 20,
+  "aliases": {
+    "zeebe-record-job-batch": {}
+  },
+  "mappings": {
+    "_doc": {
+      "properties": {
+        "value": {
+          "dynamic": "strict",
+          "properties": {
+            "type": {
+              "type": "keyword"
+            },
+            "worker": {
+              "type": "keyword"
+            },
+            "timeout": {
+              "type": "date"
+            },
+            "amount": {
+              "type": "integer"
+            },
+            "jobKeys": {
+              "type": "long"
+            },
+            "jobs": {
+              "type": "nested",
+              "dynamic": "strict",
+              "properties": {
+                "type": {
+                  "type": "keyword"
+                },
+                "headers": {
+                  "properties": {
+                    "elementId": {
+                      "type": "keyword"
+                    },
+                    "elementInstanceKey": {
+                      "type": "long"
+                    },
+                    "bpmnProcessId": {
+                      "type": "keyword"
+                    },
+                    "workflowDefinitionVersion": {
+                      "type": "integer"
+                    },
+                    "workflowInstanceKey": {
+                      "type": "long"
+                    },
+                    "workflowKey": {
+                      "type": "long"
+                    }
+                  }
+                },
+                "customHeaders": {
+                  "dynamic": true,
+                  "type": "object"
+                },
+                "worker": {
+                  "type": "keyword"
+                },
+                "retries": {
+                  "type": "long"
+                },
+                "deadline": {
+                  "type": "date"
+                },
+                "payload": {
+                  "type": "text"
+                },
+                "errorMessage": {
+                  "type": "text"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

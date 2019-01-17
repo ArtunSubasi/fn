@@ -1,0 +1,222 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+  <name>Zeebe BOM</name>
+  <groupId>io.zeebe</groupId>
+  <artifactId>zb-bom</artifactId>
+  <version>0.15.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <inceptionYear>2017</inceptionYear>
+  <url>http://zeebe.io/</url>
+
+  <parent>
+    <groupId>org.camunda</groupId>
+    <artifactId>camunda-release-parent</artifactId>
+    <version>3.0</version>
+    <!-- do not remove empty tag - http://jira.codehaus.org/browse/MNG-4687 -->
+    <relativePath />
+  </parent>
+
+  <properties>
+    <!-- release parent settings -->
+    <nexus.snapshot.repository>
+      https://app.camunda.com/nexus/content/repositories/zeebe-io-snapshots/
+    </nexus.snapshot.repository>
+    <nexus.release.repository>https://app.camunda.com/nexus/content/repositories/zeebe-io/
+    </nexus.release.repository>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zeebe-broker-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zeebe-client-java</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zeebe-protocol-test-util</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-bpmn-model</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-dispatcher</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-logstreams</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-msgpack-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-msgpack-json-el</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-msgpack-json-path</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-msgpack-value</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-protocol</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-protocol-impl</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-raft</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-gossip</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-service-container</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-transport</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-test-util</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-util</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-db</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zeebe-test</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-build-tools</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zeebe-gateway-protocol</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zeebe-gateway</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-exporter-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-elasticsearch-exporter</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zb-exporter-asserts</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <repositories>
+    <repository>
+      <id>zeebe</id>
+      <name>Zeebe Repository</name>
+      <url>https://app.camunda.com/nexus/content/repositories/zeebe-io/</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+
+    <repository>
+      <id>zeebe-snapshots</id>
+      <name>Zeebe Snapshot Repository</name>
+      <url>https://app.camunda.com/nexus/content/repositories/zeebe-io-snapshots/</url>
+      <releases>
+        <enabled>false</enabled>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+
+  <scm>
+    <url>https://github.com/zeebe-io/zeebe</url>
+    <connection>scm:git:git@github.com:zeebe-io/zeebe.git</connection>
+    <developerConnection>scm:git:git@github.com:zeebe-io/zeebe.git</developerConnection>
+    <tag>HEAD</tag>
+  </scm>
+
+</project>

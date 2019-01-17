@@ -1,0 +1,134 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+  <name>Zeebe Distribution</name>
+  <artifactId>zeebe-distribution</artifactId>
+  <packaging>jar</packaging>
+
+  <parent>
+    <groupId>io.zeebe</groupId>
+    <artifactId>zb-parent</artifactId>
+    <version>0.15.0-SNAPSHOT</version>
+    <relativePath>../parent</relativePath>
+  </parent>
+
+  <properties>
+    <skip-zbctl>true</skip-zbctl>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.zeebe</groupId>
+      <artifactId>zeebe-broker-core</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.zeebe</groupId>
+      <artifactId>zb-elasticsearch-exporter</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-slf4j-impl</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-core</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>appassembler-maven-plugin</artifactId>
+        <configuration>
+          <configurationDirectory>conf</configurationDirectory>
+          <copyConfigurationDirectory>true</copyConfigurationDirectory>
+          <includeConfigurationDirectoryInClasspath>true</includeConfigurationDirectoryInClasspath>
+          <extraJvmArguments>-Xms128m -Dlog4j.configurationFile=../conf/log4j2.xml
+          </extraJvmArguments>
+          <repositoryLayout>flat</repositoryLayout>
+          <useWildcardClassPath>true</useWildcardClassPath>
+          <repositoryName>lib</repositoryName>
+          <assembleDirectory>${project.build.directory}/zeebe-broker</assembleDirectory>
+          <platforms>
+            <platform>windows</platform>
+            <platform>unix</platform>
+          </platforms>
+          <programs>
+            <program>
+              <mainClass>io.zeebe.broker.StandaloneBroker</mainClass>
+              <id>broker</id>
+              <commandLineArguments>
+                <commandLineArgument>conf/zeebe.cfg.toml</commandLineArgument>
+              </commandLineArguments>
+            </program>
+            <program>
+              <mainClass>io.zeebe.gateway.StandaloneGateway</mainClass>
+              <id>gateway</id>
+              <commandLineArguments>
+                <commandLineArgument>conf/gateway.cfg.toml</commandLineArgument>
+              </commandLineArguments>
+            </program>
+          </programs>
+        </configuration>
+        <executions>
+          <execution>
+            <id>assemble</id>
+            <phase>package</phase>
+            <goals>
+              <goal>assemble</goal>
+            </goals>
+            <configuration>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>copy-zbctl</id>
+            <phase>package</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <target>
+                <exec executable="${maven.multiModuleProjectDirectory}/clients/zbctl/build.sh" osfamily="unix" />
+                <copy file="${maven.multiModuleProjectDirectory}/clients/zbctl/dist/zbctl" tofile="${project.build.directory}/zeebe-broker/bin/zbctl" failonerror="false" />
+                <copy file="${maven.multiModuleProjectDirectory}/clients/zbctl/dist/zbctl.exe" tofile="${project.build.directory}/zeebe-broker/bin/zbctl.exe" failonerror="false" />
+                <copy file="${maven.multiModuleProjectDirectory}/clients/zbctl/dist/zbctl.darwin" tofile="${project.build.directory}/zeebe-broker/bin/zbctl.darwin" failonerror="false" />
+                <chmod dir="${project.build.directory}/zeebe-broker/bin" perm="ugo+rx" includes="zbctl*" />
+              </target>
+              <skip>${skip-zbctl}</skip>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>assemble</id>
+            <phase>package</phase>
+            <goals>
+              <goal>single</goal>
+            </goals>
+            <configuration>
+              <attach>true</attach>
+              <appendAssemblyId>false</appendAssemblyId>
+              <descriptors>
+                <descriptor>src/main/assembly.xml</descriptor>
+              </descriptors>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>
+
