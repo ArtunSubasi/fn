@@ -20,6 +20,8 @@ func (e *Zeebe) Name() string {
 func (e *Zeebe) Setup(s fnext.ExtServer) error {
 	fmt.Println("Zeebe integration setup!") // TODO better logging
 	server := s.(*server.Server) // TODO this type assertion is hacky. ExtServer should implement the AddFnListener interface.
-	server.AddFnListener(&FnListener{})
+
+	fnListener := NewFnListener()
+	server.AddFnListener(&fnListener)
 	return nil
 }

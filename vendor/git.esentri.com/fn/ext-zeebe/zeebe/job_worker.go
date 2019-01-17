@@ -4,7 +4,7 @@ import (
     "github.com/zeebe-io/zeebe/clients/go/entities"
     "github.com/zeebe-io/zeebe/clients/go/worker"
     "github.com/zeebe-io/zeebe/clients/go/zbc"
-    "log"
+    "log" // TODO log as fn logs
 )
 
 const brokerAddr = "host.docker.internal:26500" // TODO read from a config / context
@@ -14,7 +14,7 @@ type JobWorker struct {
 }
 
 // Starts a great hard coded worker with a hard coded job type and a hard coded broker address
-func (j JobWorker) Work() {
+func (j *JobWorker) Work() {
     client, err := zbc.NewZBClient(brokerAddr)
     if err != nil {
         panic(err)
@@ -22,15 +22,14 @@ func (j JobWorker) Work() {
 
 	jobType := "payment-service"
 	log.Println("Creating a Zeebe job worker for type", jobType)
-    j.instance = client.NewJobWorker().JobType(jobType).Handler(handleJob).Open()
-    defer j.instance.Close()
-    j.instance.AwaitClose()
+	j.instance = client.NewJobWorker().JobType(jobType).Handler(handleJob).Open()
 }
 
-func (j JobWorker) StopWorking() {
+func (j *JobWorker) Stop() {
 	if j.instance != nil {
-		log.Println("Stopping worker...")
+		log.Println("Stopping worker")
 		j.instance.Close()
+		j.instance = nil
 	} else {
 		log.Println("Nothing to stop")
 	}

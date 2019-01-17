@@ -8,7 +8,13 @@ import (
 )
 
 type FnListener struct {
-	jobWorker JobWorker
+	jobWorker *JobWorker
+}
+
+func NewFnListener() FnListener {
+	f := FnListener{}
+	f.jobWorker = &JobWorker{}
+	return f
 }
 
 func (a *FnListener) BeforeFnCreate(ctx context.Context, fn *models.Fn) error {
@@ -45,14 +51,14 @@ func (a *FnListener) BeforeFnUpdate(ctx context.Context, fn *models.Fn) error {
 
 func (a *FnListener) AfterFnUpdate(ctx context.Context, fn *models.Fn) error {
 	fmt.Println("ZEEBE! AfterFnUpdate")
-	a.jobWorker.StopWorking()
+	a.jobWorker.Stop()
 	a.jobWorker.Work()
 	return nil
 }
 
 func (a *FnListener) BeforeFnDelete(ctx context.Context, fnID string) error {
 	fmt.Println("ZEEBE! BeforeFnDelete")
-	a.jobWorker.StopWorking()
+	a.jobWorker.Stop()
 	return nil
 }
 
