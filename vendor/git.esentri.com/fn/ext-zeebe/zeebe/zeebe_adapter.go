@@ -12,7 +12,7 @@ import (
     "log" // TODO log as fn logs
 )
 
-const brokerAddr = "host.docker.internal:26500" // TODO read from a config / context
+const brokerAddr = "host.docker.internal:26500" // TODO read from a config / context (app config?)
 
 type ZeebeAdapter struct {
 	instance worker.JobWorker
@@ -25,15 +25,19 @@ func (zeebeAdapter *ZeebeAdapter) RegisterFunctionAsWorker(ctx context.Context, 
 		panic(err)
     }
 
-	jobType := "payment-service"
-    log.Println("Creating a Zeebe job worker for type", jobType)
-    jobHandler := contextAwareJobHandler(ctx, fn, server)
-	zeebeAdapter.instance = client.NewJobWorker().JobType(jobType).Handler(jobHandler).Open()
+    jobType, ok := fn.Config["zeebe_job_type"]
+    if ok {
+        log.Println("Creating a Zeebe job worker for type", jobType)
+        jobHandler := contextAwareJobHandler(ctx, fn, server)
+        zeebeAdapter.instance = client.NewJobWorker().JobType(jobType).Handler(jobHandler).Open()
+    } else {
+        log.Println("No Zeebe registration for function ID: ", fn.ID)
+    }
 }
 
 func (zeebeAdapter *ZeebeAdapter) UnregisterFunctionAsWorker(ctx context.Context, fnID string) {
 	if zeebeAdapter.instance != nil {
-		log.Println("Stopping worker")
+		log.Println("Stopping worker for function ID: ", fnID)
 		zeebeAdapter.instance.Close()
 		zeebeAdapter.instance = nil
 	} else {
