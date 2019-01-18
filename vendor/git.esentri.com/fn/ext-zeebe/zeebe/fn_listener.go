@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/fnproject/fn/api/server"
 	"github.com/fnproject/fn/api/models"
 )
 
@@ -11,44 +12,39 @@ import (
 // Listens to the function create, update and delete events and delegates them to the Zeebe adapter
 type FnListener struct {
 	zeebeAdapter *ZeebeAdapter
+	server *server.Server
 }
 
-func NewFnListener() FnListener {
-	f := FnListener{}
-	f.zeebeAdapter = &ZeebeAdapter{}
-	return f
-}
-
-func (a *FnListener) BeforeFnCreate(ctx context.Context, fn *models.Fn) error {
+func (fnListener *FnListener) BeforeFnCreate(ctx context.Context, fn *models.Fn) error {
 	fmt.Println("ZEEBE! BeforeFnCreate")
 	return nil
 }
 
-func (a *FnListener) AfterFnCreate(ctx context.Context, fn *models.Fn) error {
+func (fnListener *FnListener) AfterFnCreate(ctx context.Context, fn *models.Fn) error {
 	fmt.Println("ZEEBE! AfterFnCreate")
-	a.zeebeAdapter.RegisterFunctionAsWorker()
+	fnListener.zeebeAdapter.RegisterFunctionAsWorker(ctx, fn, fnListener.server)
 	return nil
 }
 
-func (a *FnListener) BeforeFnUpdate(ctx context.Context, fn *models.Fn) error {
+func (fnListener *FnListener) BeforeFnUpdate(ctx context.Context, fn *models.Fn) error {
 	fmt.Println("ZEEBE! BeforeFnUpdate")
 	return nil
 }
 
-func (a *FnListener) AfterFnUpdate(ctx context.Context, fn *models.Fn) error {
+func (fnListener *FnListener) AfterFnUpdate(ctx context.Context, fn *models.Fn) error {
 	fmt.Println("ZEEBE! AfterFnUpdate")
-	a.zeebeAdapter.UnregisterFunctionAsWorker()
-	a.zeebeAdapter.RegisterFunctionAsWorker()
+	fnListener.zeebeAdapter.UnregisterFunctionAsWorker(ctx, fn.ID)
+	fnListener.zeebeAdapter.RegisterFunctionAsWorker(ctx, fn, fnListener.server)
 	return nil
 }
 
-func (a *FnListener) BeforeFnDelete(ctx context.Context, fnID string) error {
+func (fnListener *FnListener) BeforeFnDelete(ctx context.Context, fnID string) error {
 	fmt.Println("ZEEBE! BeforeFnDelete")
-	a.zeebeAdapter.UnregisterFunctionAsWorker()
+	fnListener.zeebeAdapter.UnregisterFunctionAsWorker(ctx, fnID)
 	return nil
 }
 
-func (a *FnListener) AfterFnDelete(ctx context.Context, fnID string) error {
+func (fnListener *FnListener) AfterFnDelete(ctx context.Context, fnID string) error {
 	fmt.Println("ZEEBE! BeforeFnCreate")
 	return nil
 }
