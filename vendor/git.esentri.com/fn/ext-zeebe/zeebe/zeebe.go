@@ -1,7 +1,7 @@
 package zeebe
 
 import (
-	"fmt"
+	"log" // TODO log as fn logs
 	"github.com/fnproject/fn/api/server"
 	"github.com/fnproject/fn/fnext"
 )
@@ -20,12 +20,12 @@ func (e *Zeebe) Name() string {
 }
 
 func (e *Zeebe) Setup(s fnext.ExtServer) error {
-	fmt.Println("Zeebe integration setup!") // TODO better logging
+	log.Println("Zeebe integration setup!")
 	server := s.(*server.Server) // TODO this type assertion is hacky. ExtServer should implement the AddFnListener interface.
+	server.AddFnListener(&FnListener{&ZeebeAdapter{}}) 
 
-	// The second parameter 'server' is even more hacky, but we need the server in the function listener in order to invoke functions
-	// Otherwise all functions have to be called over http. It this really so bad as it sounds like?
-	// TODO change the server parameter to ExtServer since we will invoke the functions over http using the invoke endpoint.
-	server.AddFnListener(&FnListener{&ZeebeAdapter{}, server}) 
+	functions := ListFunctions(loadBalancerAddr)
+	log.Println("Functions: ", functions)
+
 	return nil
 }
