@@ -3,6 +3,7 @@ package zeebe
 import (
 	"github.com/zeebe-io/zeebe/clients/go/worker"
 	"github.com/zeebe-io/zeebe/clients/go/zbc"
+	"time"
 	"log" // TODO log as fn logs
 )
 
@@ -30,7 +31,13 @@ func (jobWorkerRegistry *JobWorkerRegistry) RegisterFunctionAsWorker(fnID string
 	}
 	log.Printf("Creating a Zeebe job worker of type %v for function ID %v\n", zeebeJobType, fnID)
 	jobHandler := JobHandler(fnID, loadBalancerAddr)
-	jobWorkerRegistry.jobWorkers[fnID] = client.NewJobWorker().JobType(zeebeJobType).Handler(jobHandler).Open()
+	// TODO Add more configuration possibilities for the worker (Poll Interval, Timeout, ...)
+	jobWorkerRegistry.jobWorkers[fnID] = client.NewJobWorker().JobType(zeebeJobType).Handler(jobHandler).PollInterval(1 * time.Second).Open()
+
+	// If the zeebe gateway is not available, the Zeebe client keeps logging errors after every poll.
+	// There should be a way of controlling the logs. As an alternative, there may be a different interval for checking connections.
+	// E.g. check for new jobs every 500 ms, but if the connection is down, check every 10 seconds.
+	// TODO Contact Camunda Team with a feature request.
 }
 
 func (jobWorkerRegistry *JobWorkerRegistry) UnregisterFunctionAsWorker(fnID string) {
