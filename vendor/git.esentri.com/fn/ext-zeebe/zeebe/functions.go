@@ -13,6 +13,11 @@ type FnWithZeebeJobType struct {
 	jobType string
 }
 
+func GetZeebeJobType(fn *models.Fn) (string, bool) {
+	zeebeJobType, ok := fn.Config["zeebe_job_type"]
+	return zeebeJobType, ok
+}
+
 // Gets all functions which are deployed and have a configured Zeebe job type
 func GetFunctionsWithZeebeJobType(apiServerHost string) []*FnWithZeebeJobType {
 	functionsWithZeebeJobType := make([]*FnWithZeebeJobType, 0)
@@ -22,7 +27,7 @@ func GetFunctionsWithZeebeJobType(apiServerHost string) []*FnWithZeebeJobType {
 		fnList := getFunctions(apiServerHost, app.ID)
 		for _, fn := range fnList.Items {
 			log.Printf("Fn-ID %v / Fn-Name: %v\n", fn.ID, fn.Name)
-			jobType, ok := fn.Config["zeebe_job_type"]
+			jobType, ok := GetZeebeJobType(fn)
 			if ok {
 				functionsWithZeebeJobType = append(functionsWithZeebeJobType, &FnWithZeebeJobType{fn.ID, jobType})
 			} else {

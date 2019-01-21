@@ -41,7 +41,7 @@ func (fnListener *FnListener) AfterFnDelete(ctx context.Context, fnID string) er
 }
 
 func (fnListener *FnListener) registerFunctionAsWorkerIfConfigured(fn *models.Fn) {
-	jobType, ok := fn.Config["zeebe_job_type"]
+	jobType, ok := GetZeebeJobType(fn)
 	if ok {
 		fnListener.jobWorkerRegistry.RegisterFunctionAsWorker(fn.ID, jobType)
 	} else {
