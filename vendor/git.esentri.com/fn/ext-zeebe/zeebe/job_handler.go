@@ -18,6 +18,7 @@ func JobHandler(fnID string, loadBalancerHost string) worker.JobHandler {
         
         jobKey := job.GetKey()
     
+        // TODO extract invocation as a function
         log.Println("Invoking function", fnID)
         invocationUrl := loadBalancerHost + "/invoke/" + fnID
         log.Println("InvocationUrl:", invocationUrl)
@@ -37,14 +38,14 @@ func JobHandler(fnID string, loadBalancerHost string) worker.JobHandler {
             return
         }
 
-        var responseMap map[string]interface{}
-        err = json.Unmarshal(body, &responseMap)
+        var responseJsonObject interface{}
+        err = json.Unmarshal(body, &responseJsonObject)
         if err != nil {
             log.Println("Failed to unmarshall the response. Response will be ignored.")
-            responseMap = make(map[string]interface{})
+            responseJsonObject = nil
         }
 
-        request, err := client.NewCompleteJobCommand().JobKey(jobKey).PayloadFromMap(responseMap) 
+        request, err := client.NewCompleteJobCommand().JobKey(jobKey).PayloadFromObject(responseJsonObject) 
         if err != nil {
             // failed to set the updated payload
             failJob(client, job)
