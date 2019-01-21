@@ -5,5 +5,5 @@ import (
 )
 
 func main() {
-	zeebe.ListFunctions("http://localhost:8080")
+	zeebe.GetFunctionsWithZeebeJobType("http://localhost:8080")
 }

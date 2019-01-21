@@ -1,9 +1,9 @@
 package zeebe
 
 import (
-	"log" // TODO log as fn logs
 	"github.com/fnproject/fn/api/server"
 	"github.com/fnproject/fn/fnext"
+	"log" // TODO log as fn logs
 	"time"
 )
 
@@ -23,17 +23,17 @@ func (e *Zeebe) Name() string {
 func (e *Zeebe) Setup(s fnext.ExtServer) error {
 	log.Println("Zeebe integration setup!")
 	server := s.(*server.Server) // TODO this type assertion is hacky. ExtServer should implement the AddFnListener interface.
-	server.AddFnListener(&FnListener{&ZeebeAdapter{}}) 
+	server.AddFnListener(&FnListener{&ZeebeAdapter{}})
 
 	// Waiting for the REST endpoints to come up since the Extension Setup does not have any callback such as OnServerStarted
 	// TODO Get in touch with the Fn Project: Create a feature request, maybe a pull request
-	go waitAndListFunctions() 
+	go waitAndListFunctions()
 
 	return nil
 }
 
 func waitAndListFunctions() {
 	time.Sleep(5 * time.Second)
-	functions := ListFunctions(loadBalancerAddr)
+	functions := GetFunctionsWithZeebeJobType(loadBalancerAddr)
 	log.Println("Functions: ", functions)
 }
