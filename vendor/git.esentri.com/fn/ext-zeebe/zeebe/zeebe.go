@@ -23,17 +23,18 @@ func (e *Zeebe) Name() string {
 func (e *Zeebe) Setup(s fnext.ExtServer) error {
 	log.Println("Zeebe integration setup!")
 	server := s.(*server.Server) // TODO this type assertion is hacky. ExtServer should implement the AddFnListener interface.
-	server.AddFnListener(&FnListener{&JobWorkerRegistry{}})
-
-	// Waiting for the REST endpoints to come up since the Extension Setup does not have any callback such as OnServerStarted
-	// TODO Get in touch with the Fn Project: Create a feature request, maybe a pull request
-	go waitAndListFunctions()
-
+	jobWorkerRegistry := NewJobWorkerRegistry()
+	server.AddFnListener(&FnListener{&jobWorkerRegistry})
+	go waitAndRegisterFunctions(&jobWorkerRegistry)
 	return nil
 }
 
-func waitAndListFunctions() {
-	time.Sleep(5 * time.Second)
-	functions := GetFunctionsWithZeebeJobType(loadBalancerAddr)
-	log.Println("Functions: ", functions)
+func waitAndRegisterFunctions(jobWorkerRegistry *JobWorkerRegistry) {
+	// Waiting for the REST endpoints to come up before querying for functions since the Extension Setup does not have any callback such as OnServerStarted
+	// TODO Get in touch with the Fn Project: Create a feature request, maybe a pull request
+	time.Sleep(1 * time.Second)
+	functionsWithZeebeJobType := GetFunctionsWithZeebeJobType(loadBalancerAddr)
+	for _, fn := range functionsWithZeebeJobType {
+		jobWorkerRegistry.RegisterFunctionAsWorker(fn.fnID, fn.jobType)
+	}
 }
