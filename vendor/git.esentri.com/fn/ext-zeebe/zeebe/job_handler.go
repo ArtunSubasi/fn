@@ -18,20 +18,6 @@ func JobHandler(fnID string, loadBalancerHost string) worker.JobHandler {
         
         jobKey := job.GetKey()
     
-        headers, err := job.GetCustomHeadersAsMap()
-        if err != nil {
-            // failed to handle job as we require the custom job headers
-            failJob(client, job)
-            return
-        }
-
-        payload, err := job.GetPayloadAsMap()
-        if err != nil {
-            // failed to handle job as we require the payload
-            failJob(client, job)
-            return
-        }
-    
         log.Println("Invoking function", fnID)
         invocationUrl := loadBalancerHost + "/invoke/" + fnID
         log.Println("InvocationUrl:", invocationUrl)
@@ -58,20 +44,14 @@ func JobHandler(fnID string, loadBalancerHost string) worker.JobHandler {
             responseMap = make(map[string]interface{})
         }
 
-        // Copy all elements from the response map to the original payload
-        for k, v := range responseMap {
-            payload[k] = v
-        }
-
-        request, err := client.NewCompleteJobCommand().JobKey(jobKey).PayloadFromMap(payload) 
+        request, err := client.NewCompleteJobCommand().JobKey(jobKey).PayloadFromMap(responseMap) 
         if err != nil {
             // failed to set the updated payload
             failJob(client, job)
             return
         }
     
-        log.Println("Complete job", jobKey, "of type", job.Type)
-        log.Println("Collect money using payment method:", headers["method"])
+        log.Println("Completed job", jobKey, "of type", job.Type)
     
         request.Send()
     }

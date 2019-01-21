@@ -9,7 +9,6 @@ import (
 
 // Extension for Zeebe integration
 func init() {
-	// TODO only register the extension for the modes "Full" and "API Server"
 	server.RegisterExtension(&Zeebe{})
 }
 
@@ -21,12 +20,16 @@ func (e *Zeebe) Name() string {
 }
 
 func (e *Zeebe) Setup(s fnext.ExtServer) error {
+	// The the extension should only be set up for the FnServer modes "Full" and "API Server"
+	// At the moment, checking this is not possible because the node type is not exposed in the ExtServer or Server types.
+	// This is not a big problem, because different FnServer Modes must be build separately.
+	// Therefore only the API Server must be build with the Zeebe extension. All other parts must be built without the extension.
 	log.Println("Zeebe integration setup!")
 	server := s.(*server.Server) // TODO this type assertion is hacky. ExtServer should implement the AddFnListener interface.
 	jobWorkerRegistry := NewJobWorkerRegistry()
 	server.AddFnListener(&FnListener{&jobWorkerRegistry})
 
-	// TODO we eventually also need an App Listener. If an App gets deletes, all functions within are deletes as well.
+	// TODO we eventually also need an App Listener. If an App gets deletes, all functions within are deleted as well.
 	// All Job workers of the app have to be stopped.
 
 	// TODO Coolness factor: register a new Endpoint using the ExtServer interface which lists all registered functions and their zeebe job types
