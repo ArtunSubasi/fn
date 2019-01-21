@@ -22,6 +22,7 @@ func JobHandler(fnID string, loadBalancerHost string) worker.JobHandler {
         log.Println("Invoking function", fnID)
         invocationUrl := loadBalancerHost + "/invoke/" + fnID
         log.Println("InvocationUrl:", invocationUrl)
+        log.Println("Payload:", job.Payload)
         resp, err := http.Post(invocationUrl, "application/json", bytes.NewBuffer([]byte(job.Payload)))
         if err != nil {
             // failed to post
@@ -38,11 +39,14 @@ func JobHandler(fnID string, loadBalancerHost string) worker.JobHandler {
             return
         }
 
-        var responseJsonObject interface{}
+        var responseJsonObject map[string]interface{}
         err = json.Unmarshal(body, &responseJsonObject)
         if err != nil {
-            log.Println("Failed to unmarshall the response. Response will be ignored.")
+            log.Println("Failed to unmarshall the response. Zeebe supports only JSON objects on root level. Response will be ignored.")
+            log.Println("Response:", string(body))
             responseJsonObject = nil
+        } else {
+            log.Println("Response:", responseJsonObject)
         }
 
         request, err := client.NewCompleteJobCommand().JobKey(jobKey).PayloadFromObject(responseJsonObject) 
