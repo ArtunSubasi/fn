@@ -14,17 +14,29 @@ type FnWithZeebeJobType struct {
 }
 
 // Gets all functions which are deployed and have a configured Zeebe job type
-func GetFunctionsWithZeebeJobType(apiServerHost string) []FnWithZeebeJobType {
+func GetFunctionsWithZeebeJobType(apiServerHost string) []*FnWithZeebeJobType {
+	functionsWithZeebeJobType := make([]*FnWithZeebeJobType, 0)
 	appList := getApps(apiServerHost)
 	for _, app := range appList.Items {
 		log.Printf("App-ID %v / App-Name: %v\n", app.ID, app.Name)
 		fnList := getFunctions(apiServerHost, app.ID)
 		for _, fn := range fnList.Items {
 			log.Printf("Fn-ID %v / Fn-Name: %v\n", fn.ID, fn.Name)
+			jobType, ok := fn.Config["zeebe_job_type"]
+			if ok {
+				functionsWithZeebeJobType = append(functionsWithZeebeJobType, &FnWithZeebeJobType{fn.ID, jobType})
+			} else {
+				log.Println("No Zeebe job type configuration found. Function ID: ", fn.ID)
+			}
 		}
 	}
+
+	for _, fn := range functionsWithZeebeJobType {
+		log.Printf("Fn-ID %v / Fn-JobType: %v\n", fn.fnID, fn.jobType)
+	}
+
 	// TODO now iterate over all apps and fetch/filter he functions (and remove the dummy array)
-	return make([]FnWithZeebeJobType, 0)
+	return functionsWithZeebeJobType
 }
 
 func getApps(apiServerHost string) *models.AppList {
