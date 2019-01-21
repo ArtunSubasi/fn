@@ -30,13 +30,15 @@ func JobHandler(fnID string, loadBalancerHost string) worker.JobHandler {
         }
     
         log.Println("Invoking function", fnID)
-        resp, err := http.Post(loadBalancerHost + "/invoke/" + fnID, "application/json", nil) // TODO get the host and the port from somewhere
+        invocationUrl := loadBalancerHost + "/invoke/" + fnID
+        resp, err := http.Post(invocationUrl, "application/json", nil) // TODO get the host and the port from somewhere
         if err != nil {
             // failed to post
             log.Printf("Failed to send the post request for job %v / error: %v\n", jobKey, err)
             failJob(client, job)
             return
         }
+        // TODO check the response code
         log.Printf("Function invocation successful. Response: %v\n", resp)
 
         // Remove the dummy payload. Use the response, Luke.

@@ -25,6 +25,13 @@ func (e *Zeebe) Setup(s fnext.ExtServer) error {
 	server := s.(*server.Server) // TODO this type assertion is hacky. ExtServer should implement the AddFnListener interface.
 	jobWorkerRegistry := NewJobWorkerRegistry()
 	server.AddFnListener(&FnListener{&jobWorkerRegistry})
+
+	// TODO we eventually also need an App Listener. If an App gets deletes, all functions within are deletes as well.
+	// All Job workers of the app have to be stopped.
+
+	// TODO Coolness factor: register a new Endpoint using the ExtServer interface which lists all registered functions and their zeebe job types
+	// so that we may show a simple UI of the job workers and their connections
+
 	go waitAndRegisterFunctions(&jobWorkerRegistry)
 	return nil
 }
