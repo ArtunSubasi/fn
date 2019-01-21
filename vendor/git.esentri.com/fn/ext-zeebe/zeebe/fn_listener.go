@@ -2,14 +2,14 @@ package zeebe
 
 import (
 	"context"
-	"log"
 	"github.com/fnproject/fn/api/models"
+	"log"
 )
 
 // Function listener for the Zeebe extension implementing the next.FnListener interface
 // Listens to the function create, update and delete events and delegates them to the Zeebe adapter
 type FnListener struct {
-	zeebeAdapter *ZeebeAdapter
+	zeebeAdapter *JobWorkerRegistry
 }
 
 func (fnListener *FnListener) BeforeFnCreate(ctx context.Context, fn *models.Fn) error {

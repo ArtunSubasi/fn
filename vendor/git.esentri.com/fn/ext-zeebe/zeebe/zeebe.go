@@ -23,7 +23,7 @@ func (e *Zeebe) Name() string {
 func (e *Zeebe) Setup(s fnext.ExtServer) error {
 	log.Println("Zeebe integration setup!")
 	server := s.(*server.Server) // TODO this type assertion is hacky. ExtServer should implement the AddFnListener interface.
-	server.AddFnListener(&FnListener{&ZeebeAdapter{}})
+	server.AddFnListener(&FnListener{&JobWorkerRegistry{}})
 
 	// Waiting for the REST endpoints to come up since the Extension Setup does not have any callback such as OnServerStarted
 	// TODO Get in touch with the Fn Project: Create a feature request, maybe a pull request
