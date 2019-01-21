@@ -5,6 +5,9 @@ import (
 	"github.com/zeebe-io/zeebe/clients/go/worker"
     "net/http"
     "log" // TODO log as fn logs
+    "io/ioutil"
+    "bytes"
+    "encoding/json"
 )
 
 // Closure over the function ID and the needed context
@@ -21,7 +24,7 @@ func JobHandler(fnID string, loadBalancerHost string) worker.JobHandler {
             failJob(client, job)
             return
         }
-    
+
         payload, err := job.GetPayloadAsMap()
         if err != nil {
             // failed to handle job as we require the payload
@@ -31,18 +34,34 @@ func JobHandler(fnID string, loadBalancerHost string) worker.JobHandler {
     
         log.Println("Invoking function", fnID)
         invocationUrl := loadBalancerHost + "/invoke/" + fnID
-        resp, err := http.Post(invocationUrl, "application/json", nil) // TODO get the host and the port from somewhere
+        log.Println("InvocationUrl:", invocationUrl)
+        resp, err := http.Post(invocationUrl, "application/json", bytes.NewBuffer([]byte(job.Payload)))
         if err != nil {
             // failed to post
             log.Printf("Failed to send the post request for job %v / error: %v\n", jobKey, err)
             failJob(client, job)
             return
         }
-        // TODO check the response code
-        log.Printf("Function invocation successful. Response: %v\n", resp)
 
-        // Remove the dummy payload. Use the response, Luke.
-        payload["totalPrice"] = 46.50
+        log.Println("Function invocation successful.")
+
+        body, err := ioutil.ReadAll(resp.Body)
+        if err != nil {
+            log.Println("Failed to read the body")
+            return
+        }
+
+        var responseMap map[string]interface{}
+        err = json.Unmarshal(body, &responseMap)
+        if err != nil {
+            log.Println("Failed to unmarshall the response. Response will be ignored.")
+            responseMap = make(map[string]interface{})
+        }
+
+        // Copy all elements from the response map to the original payload
+        for k, v := range responseMap {
+            payload[k] = v
+        }
 
         request, err := client.NewCompleteJobCommand().JobKey(jobKey).PayloadFromMap(payload) 
         if err != nil {
@@ -52,7 +71,6 @@ func JobHandler(fnID string, loadBalancerHost string) worker.JobHandler {
         }
     
         log.Println("Complete job", jobKey, "of type", job.Type)
-        log.Println("Processing order:", payload["orderId"])
         log.Println("Collect money using payment method:", headers["method"])
     
         request.Send()
