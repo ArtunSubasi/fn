@@ -40,7 +40,6 @@ func GetFunctionsWithZeebeJobType(apiServerHost string) []*FnWithZeebeJobType {
 		log.Printf("Fn-ID %v / Fn-JobType: %v\n", fn.fnID, fn.jobType)
 	}
 
-	// TODO now iterate over all apps and fetch/filter he functions (and remove the dummy array)
 	return functionsWithZeebeJobType
 }
 
@@ -51,7 +50,6 @@ func getApps(apiServerHost string) *models.AppList {
 
 	// TODO Better error handling
 	if err != nil || resp.StatusCode != http.StatusOK {
-		// failed to post
 		log.Println("Failed to get the list of apps")
 		return &models.AppList{}
 	}
@@ -80,7 +78,6 @@ func getFunctions(apiServerHost string, appID string) *models.FnList {
 
 	// TODO Better error handling
 	if err != nil || resp.StatusCode != http.StatusOK {
-		// failed to post
 		log.Println("Failed to get the list of functions")
 		return &models.FnList{}
 	}

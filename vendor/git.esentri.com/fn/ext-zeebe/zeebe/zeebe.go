@@ -48,8 +48,8 @@ func (zeebe *Zeebe) Setup(s fnext.ExtServer) error {
 	jobWorkerRegistry := NewJobWorkerRegistry(loadBalancerAddr, zeebeGatewayAddr)
 	server.AddFnListener(&FnListener{&jobWorkerRegistry})
 
-	// TODO we eventually also need an App Listener. If an App gets deletes, all functions within are deleted as well.
-	// All Job workers of the app have to be stopped.
+	// TODO we eventually also need an App Listener. Because if an App gets deleted, all functions within are deleted as well.
+	// In this case, all Job workers of the app have to be stopped.
 
 	// TODO Coolness factor: register a new Endpoint using the ExtServer interface which lists all registered functions and their zeebe job types
 	// so that we may show a simple UI of the job workers and their connections

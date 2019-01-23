@@ -24,7 +24,6 @@ func NewJobWorkerRegistry(loadBalancerAddr string, zeebeGatewayAddr string) JobW
 	return jobWorkerRegistry
 }
 
-// Starts a great hard coded worker with a hard coded job type and a hard coded broker address
 func (jobWorkerRegistry *JobWorkerRegistry) RegisterFunctionAsWorker(fnID string, zeebeJobType string) {
 	client, err := zbc.NewZBClient(jobWorkerRegistry.zeebeGatewayAddr)
 	if err != nil {
