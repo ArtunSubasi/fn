@@ -29,7 +29,7 @@ Die Docker Compose-Datei ist in dem obigen Repository so konfiguriert, dass der 
 fnserver Starten: 
 ```sh
 docker run --rm -i --name fnserver \
-    -e FN_LB_URL=http://localhost:8080 \ # test
+    -e FN_LB_URL=http://localhost:8080 \
     -e FN_API_SERVER_URL=http://localhost:8080 \
     -e FN_ZEEBE_GATEWAY_URL=http://localhost:26500 \
     -v ./fn/data:/app/data  \
