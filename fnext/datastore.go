@@ -151,7 +151,7 @@ func (e *extds) InsertFn(ctx context.Context, fn *models.Fn) (*models.Fn, error)
 		return nil, err
 	}
 
-	f, err := e.Datastore.InsertFn(ctx, fn)
+	fn, err = e.Datastore.InsertFn(ctx, fn)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +160,7 @@ func (e *extds) InsertFn(ctx context.Context, fn *models.Fn) (*models.Fn, error)
 	if err != nil {
 		return nil, err
 	}
-	return f, nil
+	return fn, nil
 }
 
 func (e *extds) UpdateFn(ctx context.Context, fn *models.Fn) (*models.Fn, error) {
