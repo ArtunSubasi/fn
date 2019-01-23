@@ -45,8 +45,8 @@ docker run --rm -i --name fnserver \
 
 ## Docker-Volumes
 * /app/data ist die Datenbank mit den Fn Apps und Funktionen
-* /var/run/docker.sock ist das Unix-Socket des Docker-Daemons, damit der Fn Server über den Docker-Deamon intern Docker Container verwalten zu können, da die Funktionen auch als Docker Container laufen
+* /var/run/docker.sock ist das Unix-Socket des Docker-Daemons, damit der Fn Server über den Docker-Deamon intern Docker Container verwalten kann, da die Funktionen auch als Docker Container laufen
 
 # Weitere Erkenntnisse
-* fnserver lässt sich unter MacOS nicht nativ starten. Siehe Slack-Chat: https://fnproject.slack.com/archives/C6FL02Q02/p1547646705082200
+* fnserver lässt sich unter MacOS nicht nativ starten. D.h. das Go-Kompilat läuft nicht. Deshalb ist das Docker-Runtime notwendig. Siehe Slack-Chat: https://fnproject.slack.com/archives/C6FL02Q02/p1547646705082200
 
