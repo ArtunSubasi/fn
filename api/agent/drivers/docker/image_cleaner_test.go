@@ -41,6 +41,7 @@ func TestImageCleaner1(t *testing.T) {
 		cancel:   cancel,
 		conf:     drivers.Config{},
 		docker:   &mockClient{},
+		network:  NewDockerNetworks(drivers.Config{}),
 		imgCache: NewImageCache([]string{"exempt"}, uint64(1024*1024)),
 	}
 
@@ -95,6 +96,7 @@ func TestImageCleaner2(t *testing.T) {
 		cancel:   cancel,
 		conf:     drivers.Config{},
 		docker:   &mockClient{},
+		network:  NewDockerNetworks(drivers.Config{}),
 		imgCache: NewImageCache([]string{}, uint64(1024*1024)),
 	}
 
@@ -112,11 +114,18 @@ func TestImageCleaner2(t *testing.T) {
 		Size: 512 * 1024 * 1024,
 	}
 
-	task := &taskDockerTest{"test-docker", bytes.NewBufferString(`{"isDebug": true}`), &output, &errors}
+	task := createTask("test-docker")
+	task.output = &output
+	task.errors = &errors
 
 	cookie, err := dkr.CreateCookie(ctx, task)
 	if err != nil {
 		t.Fatal("Couldn't create task cookie")
+	}
+
+	err = cookie.AuthImage(ctx)
+	if err != nil {
+		t.Fatal("Couldn't auth image test")
 	}
 
 	shouldPull, err := cookie.ValidateImage(ctx)

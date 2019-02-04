@@ -13,6 +13,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -237,12 +239,14 @@ func (ch *callHandle) enqueueCallResponse(err error) {
 	var details string
 	var errCode int
 	var errStr string
+	var errUser bool
 
 	log := common.Logger(ch.ctx)
 
 	if err != nil {
 		errCode = models.GetAPIErrorCode(err)
 		errStr = err.Error()
+		errUser = models.IsFuncError(err)
 	}
 
 	schedulerDuration, executionDuration := GetCallLatencies(ch.c)
@@ -283,6 +287,7 @@ func (ch *callHandle) enqueueCallResponse(err error) {
 			CompletedAt:       completedAt,
 			SchedulerDuration: int64(schedulerDuration),
 			ExecutionDuration: int64(executionDuration),
+			ErrorUser:         errUser,
 		}}})
 
 	if errTmp != nil {
@@ -548,6 +553,9 @@ type statusTracker struct {
 	kdumpsOnDisk     uint64
 	imageName        string
 
+	// if file exists, then network in status checks is enabled.
+	barrierPath string
+
 	// lock protects expiry/cache/wait fields below. RunnerStatus ptr itself
 	// stored every time status image is executed. Cache fetches use a shallow
 	// copy of RunnerStatus to ensure consistency. Shallow copy is sufficient
@@ -784,6 +792,14 @@ func (pr *pureRunner) runStatusCall(ctx context.Context) *runner.RunnerStatus {
 	recorder := httptest.NewRecorder()
 	player := ioutil.NopCloser(strings.NewReader(c.Payload))
 
+	// Fetch network status
+	if pr.status.barrierPath != "" {
+		_, err := os.Lstat(pr.status.barrierPath)
+		if err != nil {
+			result.IsNetworkDisabled = true
+		}
+	}
+
 	var mcall *call
 	agentCall, err := pr.a.GetCall(FromModelAndInput(&c, player),
 		WithLogger(common.NoopReadWriteCloser{}),
@@ -792,6 +808,10 @@ func (pr *pureRunner) runStatusCall(ctx context.Context) *runner.RunnerStatus {
 	)
 	if err == nil {
 		mcall = agentCall.(*call)
+
+		// disable network if not ready
+		mcall.disableNet = result.IsNetworkDisabled
+
 		err = pr.a.Submit(mcall)
 	}
 
@@ -944,9 +964,17 @@ func (pr *pureRunner) Status(ctx context.Context, _ *empty.Empty) (*runner.Runne
 		common.Logger(ctx).WithError(err).Errorf("Status call failed result=%+v", status)
 	}
 
-	isCached := err == nil && (status != nil && status.Cached)
-	isSuccess := err == nil && (status != nil && !status.Failed)
-	statsStatusCall(ctx, isCached, isSuccess)
+	cached := "error"
+	success := "error"
+	network := "error"
+
+	if err == nil && status != nil {
+		cached = strconv.FormatBool(status.Cached)
+		success = strconv.FormatBool(!status.Failed)
+		network = strconv.FormatBool(!status.IsNetworkDisabled)
+	}
+	statsStatusCall(ctx, cached, success, network)
+
 	return status, err
 }
 
@@ -989,6 +1017,16 @@ type PureRunnerOption func(*pureRunner) error
 func PureRunnerWithSSL(tlsCfg *tls.Config) PureRunnerOption {
 	return func(pr *pureRunner) error {
 		pr.creds = credentials.NewTLS(tlsCfg)
+		return nil
+	}
+}
+
+func PureRunnerWithStatusNetworkEnabler(barrierPath string) PureRunnerOption {
+	return func(pr *pureRunner) error {
+		if pr.status.barrierPath != "" {
+			return errors.New("Failed to create pure runner: status barrier path already created")
+		}
+		pr.status.barrierPath = barrierPath
 		return nil
 	}
 }

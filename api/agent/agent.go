@@ -867,21 +867,29 @@ func (a *agent) runHot(ctx context.Context, caller slotCaller, call *call, tok R
 		return
 	}
 
-	needsPull, err := cookie.ValidateImage(ctx)
+	err = cookie.AuthImage(ctx)
 	if tryQueueErr(err, errQueue) != nil {
 		return
 	}
 
+	needsPull, err := cookie.ValidateImage(ctx)
 	if needsPull {
-		ctx, cancel := context.WithTimeout(ctx, a.cfg.HotPullTimeout)
-		err = cookie.PullImage(ctx)
-		cancel()
-		if ctx.Err() == context.DeadlineExceeded {
+		pullCtx, pullCancel := context.WithTimeout(ctx, a.cfg.HotPullTimeout)
+		err = cookie.PullImage(pullCtx)
+		pullCancel()
+		if err != nil && pullCtx.Err() == context.DeadlineExceeded {
 			err = models.ErrDockerPullTimeout
 		}
-		if tryQueueErr(err, errQueue) != nil {
-			return
+		if tryQueueErr(err, errQueue) == nil {
+			needsPull, err = cookie.ValidateImage(ctx) // uses original ctx timeout
+			if needsPull {
+				// Image must have removed by image cleaner, manual intervention, etc.
+				err = models.ErrCallTimeoutServerBusy
+			}
 		}
+	}
+	if tryQueueErr(err, errQueue) != nil {
+		return
 	}
 
 	err = cookie.CreateContainer(ctx)
@@ -1141,6 +1149,7 @@ type container struct {
 	cpus       uint64
 	fsSize     uint64
 	tmpFsSize  uint64
+	disableNet bool
 	iofs       iofs
 	logCfg     drivers.LoggerConfig
 	close      func()
@@ -1209,6 +1218,7 @@ func newHotContainer(ctx context.Context, call *call, cfg *Config, id string, ud
 		cpus:       uint64(call.CPUs),
 		fsSize:     cfg.MaxFsSize,
 		tmpFsSize:  uint64(call.TmpFsSize),
+		disableNet: call.disableNet,
 		iofs:       iofs,
 		logCfg: drivers.LoggerConfig{
 			URL: strings.TrimSpace(call.SyslogURL),
@@ -1272,7 +1282,6 @@ func (c *container) Volumes() [][2]string               { return nil }
 func (c *container) WorkDir() string                    { return "" }
 func (c *container) Close()                             { c.close() }
 func (c *container) Image() string                      { return c.image }
-func (c *container) Timeout() time.Duration             { return 0 } // context handles this
 func (c *container) EnvVars() map[string]string         { return c.env }
 func (c *container) Memory() uint64                     { return c.memory * 1024 * 1024 } // convert MB
 func (c *container) CPUs() uint64                       { return c.cpus }
@@ -1283,6 +1292,7 @@ func (c *container) LoggerConfig() drivers.LoggerConfig { return c.logCfg }
 func (c *container) UDSAgentPath() string               { return c.iofs.AgentPath() }
 func (c *container) UDSDockerPath() string              { return c.iofs.DockerPath() }
 func (c *container) UDSDockerDest() string              { return iofsDockerMountDest }
+func (c *container) DisableNet() bool                   { return c.disableNet }
 
 // WriteStat publishes each metric in the specified Stats structure as a histogram metric
 func (c *container) WriteStat(ctx context.Context, stat drivers.Stat) {

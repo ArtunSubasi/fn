@@ -41,11 +41,15 @@ type Cookie interface {
 	// Unfreeze a frozen container to unpause frozen processes
 	Unfreeze(ctx context.Context) error
 
-	// Validate/Inspect and Authenticate image. Returns true if the image needs
-	// to be pulled and non-nil error if validation/auth/inspection fails.
+	// Authenticate image. Returns non-nil error if auth fails.
+	AuthImage(ctx context.Context) error
+
+	// Validate/Inspect image. Returns true if the image needs
+	// to be pulled and non-nil error if validation/inspection fails.
 	ValidateImage(ctx context.Context) (bool, error)
 
-	// Pull the image.
+	// Pull the image. An image pull requires validation/inspection
+	// again.
 	PullImage(ctx context.Context) error
 
 	// Create container which can be Run() later
@@ -122,9 +126,6 @@ type ContainerTask interface {
 	// Image returns the runtime specific image to run.
 	Image() string
 
-	// Timeout specifies the maximum time a task is allowed to run. Return 0 to let it run forever.
-	Timeout() time.Duration
-
 	// Driver will write output log from task execution to these writers. Must be
 	// non-nil. Use io.Discard if log is irrelevant.
 	Logger() (stdout, stderr io.Writer)
@@ -177,6 +178,9 @@ type ContainerTask interface {
 	// UDSDockerDest is the destination mount point for uds path. it is the path
 	// of the directory where the sock file resides inside of the container.
 	UDSDockerDest() string
+
+	// Returns true if network is disabled.
+	DisableNet() bool
 }
 
 // Stat is a bucket of stats from a driver at a point in time for a certain task.

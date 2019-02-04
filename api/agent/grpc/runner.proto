@@ -47,6 +47,7 @@ message CallFinished {
     string completedAt = 7;
     int64 schedulerDuration = 8;
     int64 executionDuration = 9;
+    bool errorUser = 10;
 }
 
 message ClientMsg {
@@ -80,6 +81,7 @@ message RunnerStatus {
     uint64 kdumpsOnDisk = 14; // number of kdumps on local disk
     int64 schedulerDuration = 15; // the amount of time for scheduler execution
     int64 executionDuration = 16; // the amount of time for function execution
+    bool isNetworkDisabled = 17; // returns true if runner network is not ready
 }
 
 service RunnerProtocol {
