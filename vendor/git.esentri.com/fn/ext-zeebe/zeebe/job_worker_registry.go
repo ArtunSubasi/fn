@@ -8,9 +8,6 @@ import (
 )
 
 type JobWorkerRegistry struct {
-	// FnID is not unique without the app ID. The AppID should be used as well.
-	// But in this case, workers cannot be unregistered because the FnListener.AfterFnDelete only has the FnID as parameter
-	// TODO Contact the Fn Project. FnListener.AfterFnDelete should have more context, at least the AppID of the App in which the function lived.
 	jobWorkers map[string]worker.JobWorker // FnID -> JobWorker
 	loadBalancerAddr string
 	zeebeGatewayAddr string

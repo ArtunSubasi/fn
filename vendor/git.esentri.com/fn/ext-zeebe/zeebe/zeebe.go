@@ -1,12 +1,12 @@
 package zeebe
 
 import (
+	"errors"
 	"github.com/fnproject/fn/api/server"
 	"github.com/fnproject/fn/fnext"
 	"log" // TODO log as fn logs
-	"time"
 	"os"
-	"errors"
+	"time"
 )
 
 // Extension for Zeebe integration
@@ -51,8 +51,7 @@ func (zeebe *Zeebe) Setup(s fnext.ExtServer) error {
 	// TODO we eventually also need an App Listener. Because if an App gets deleted, all functions within are deleted as well.
 	// In this case, all Job workers of the app have to be stopped.
 
-	// TODO Coolness factor: register a new Endpoint using the ExtServer interface which lists all registered functions and their zeebe job types
-	// so that we may show a simple UI of the job workers and their connections
+	s.AddEndpoint("GET", "/zeebe", &zeebeEndpointHandler{apiServerAddr})
 
 	go zeebe.waitAndRegisterFunctions(&jobWorkerRegistry, apiServerAddr)
 	return nil
