@@ -4,7 +4,7 @@ import (
 	"errors"
 	"github.com/fnproject/fn/api/server"
 	"github.com/fnproject/fn/fnext"
-	"log" // TODO log as fn logs
+	"github.com/sirupsen/logrus"
 	"os"
 	"time"
 )
@@ -26,7 +26,7 @@ func (zeebe *Zeebe) Setup(s fnext.ExtServer) error {
 	// At the moment, checking this is not possible because the node type is not exposed in the ExtServer or Server types.
 	// This is not a big problem, because different FnServer Modes must be build separately.
 	// Therefore only the API Server must be build with the Zeebe extension. All other parts must be built without the extension.
-	log.Println("Zeebe integration setup!")
+	logrus.Debugln("Zeebe extension is starting!")
 
 	loadBalancerAddr := os.Getenv("FN_LB_URL")
 	if loadBalancerAddr == "" {
@@ -44,21 +44,25 @@ func (zeebe *Zeebe) Setup(s fnext.ExtServer) error {
 		return errors.New("Zeebe: The Zeebe Gateway address FN_ZEEBE_GATEWAY_URL ist not configured. The zeebe extension could not start.")
 	}
 
-	server := s.(*server.Server) // TODO this type assertion is hacky. ExtServer should implement the AddFnListener interface.
+	// This type assertion is hacky. ExtServer should implement the AddFnListener interface.
+	// TODO Get in touch with the Fn Project: Create a feature request, maybe a pull request
+	server := s.(*server.Server)
+
 	jobWorkerRegistry := NewJobWorkerRegistry(loadBalancerAddr, zeebeGatewayAddr)
 	server.AddFnListener(&FnListener{&jobWorkerRegistry})
-
-	// TODO we eventually also need an App Listener. Because if an App gets deleted, all functions within are deleted as well.
+	// TODO we will eventually need an App Listener as well. Because if an App gets deleted, all functions within are deleted as well.
 	// In this case, all Job workers of the app have to be stopped.
 
 	s.AddEndpoint("GET", "/zeebe", &zeebeEndpointHandler{apiServerAddr})
 
 	go zeebe.waitAndRegisterFunctions(&jobWorkerRegistry, apiServerAddr)
+	logrus.Infoln("Zeebe extension startet!")
 	return nil
 }
 
 func (zeebe *Zeebe) waitAndRegisterFunctions(jobWorkerRegistry *JobWorkerRegistry, apiServerAddr string) {
-	// Waiting for the REST endpoints to come up before querying for functions since the Extension Setup does not have any callback such as OnServerStarted
+	// Sleeping and waiting for the REST endpoints to come up before querying for existing functions 
+	// since the Extension Setup does not have any callback such as OnServerStarted
 	// TODO Get in touch with the Fn Project: Create a feature request, maybe a pull request
 	time.Sleep(1 * time.Second)
 	functionsWithZeebeJobType := GetFunctionsWithZeebeJobType(apiServerAddr)

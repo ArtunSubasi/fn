@@ -6,6 +6,7 @@ import (
 )
 
 // Handler for the endpoint "zeebe" which lists all registered zeebe job workers as plain text
+// TODO return the job workers in a structured form (JSON etc.) so that it can be processed in a UI
 type zeebeEndpointHandler struct{
 	apiServerAddr string
 }

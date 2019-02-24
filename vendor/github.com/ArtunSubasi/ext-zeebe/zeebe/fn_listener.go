@@ -3,7 +3,7 @@ package zeebe
 import (
 	"context"
 	"github.com/fnproject/fn/api/models"
-	"log"
+	"github.com/sirupsen/logrus"
 )
 
 // Function listener for the Zeebe extension implementing the next.FnListener interface
@@ -45,6 +45,6 @@ func (fnListener *FnListener) registerFunctionAsWorkerIfConfigured(fn *models.Fn
 	if ok {
 		fnListener.jobWorkerRegistry.RegisterFunctionAsWorker(fn.ID, jobType)
 	} else {
-		log.Println("No Zeebe job type configuration found. Function ID: ", fn.ID)
+		logrus.Infoln("No Zeebe job type configuration found. Function ID: ", fn.ID)
 	}
 }
