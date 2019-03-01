@@ -40,9 +40,9 @@ type Config struct {
 	IOFSAgentPath           string        `json:"iofs_path"`
 	IOFSMountRoot           string        `json:"iofs_mount_root"`
 	IOFSOpts                string        `json:"iofs_opts"`
-	MaxDockerRetries        uint64        `json:"max_docker_retries"`
 	ImageCleanMaxSize       uint64        `json:"image_clean_max_size"`
 	ImageCleanExemptTags    string        `json:"image_clean_exempt_tags"`
+	ImageEnableVolume       bool          `json:"image_enable_volume"`
 }
 
 const (
@@ -52,6 +52,8 @@ const (
 	EnvImageCleanMaxSize = "FN_IMAGE_CLEAN_MAX_SIZE"
 	// EnvImageCleanExemptTags list of image names separated by whitespace that are exempt from removal in image cleaner
 	EnvImageCleanExemptTags = "FN_IMAGE_CLEAN_EXEMPT_TAGS"
+	// EnvImageEnableVolume allows image to contain VOLUME definitions
+	EnvImageEnableVolume = "FN_IMAGE_ENABLE_VOLUME"
 	// EnvDockerNetworks is a comma separated list of networks to attach to each container started
 	EnvDockerNetworks = "FN_DOCKER_NETWORKS"
 	// EnvDockerLoadFile is a file location for a file that contains a tarball of a docker image to load on startup
@@ -170,6 +172,7 @@ func NewConfig() (*Config, error) {
 	err = setEnvBool(err, EnvDisableDebugUserLogs, &cfg.DisableDebugUserLogs)
 	err = setEnvUint(err, EnvImageCleanMaxSize, &cfg.ImageCleanMaxSize)
 	err = setEnvStr(err, EnvImageCleanExemptTags, &cfg.ImageCleanExemptTags)
+	err = setEnvBool(err, EnvImageEnableVolume, &cfg.ImageEnableVolume)
 	if err != nil {
 		return cfg, err
 	}

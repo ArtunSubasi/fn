@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 
 	"github.com/fnproject/fn/api/agent/drivers"
+	dockerdriver "github.com/fnproject/fn/api/agent/drivers/docker"
 	"github.com/fnproject/fn/api/common"
 	"github.com/fnproject/fn/api/id"
 	"github.com/fnproject/fn/api/models"
@@ -109,7 +110,12 @@ type agent struct {
 	shutWg   *common.WaitGroup
 	shutonce sync.Once
 
+	// TODO(reed): shoot this fucking thing
 	callOverrider CallOverrider
+
+	// additional options to configure each call
+	callOpts []CallOpt
+
 	// deferred actions to call at end of initialisation
 	onStartup []func()
 }
@@ -213,6 +219,15 @@ func WithCallOverrider(fn CallOverrider) Option {
 	}
 }
 
+// WithCallOptions adds additional call options to each call created from GetCall, these
+// options will be executed after any other options supplied to GetCall
+func WithCallOptions(opts ...CallOpt) Option {
+	return func(a *agent) error {
+		a.callOpts = append(a.callOpts, opts...)
+		return nil
+	}
+}
+
 // NewDockerDriver creates a default docker driver from agent config
 func NewDockerDriver(cfg *Config) (drivers.Driver, error) {
 	return drivers.New("docker", drivers.Config{
@@ -226,10 +241,10 @@ func NewDockerDriver(cfg *Config) (drivers.Driver, error) {
 		PreForkNetworks:      cfg.PreForkNetworks,
 		MaxTmpFsInodes:       cfg.MaxTmpFsInodes,
 		EnableReadOnlyRootFs: !cfg.DisableReadOnlyRootFs,
-		MaxRetries:           cfg.MaxDockerRetries,
 		ContainerLabelTag:    cfg.ContainerLabelTag,
 		ImageCleanMaxSize:    cfg.ImageCleanMaxSize,
 		ImageCleanExemptTags: cfg.ImageCleanExemptTags,
+		ImageEnableVolume:    cfg.ImageEnableVolume,
 	})
 }
 
@@ -716,7 +731,6 @@ func (s *hotSlot) writeResp(ctx context.Context, max uint64, resp *http.Response
 	}
 
 	rw = newSizerRespWriter(max, rw)
-	rw.WriteHeader(http.StatusOK)
 
 	// WARNING: is the following header copy safe?
 	// if we're writing directly to the response writer, we need to set headers
@@ -727,6 +741,7 @@ func (s *hotSlot) writeResp(ctx context.Context, max uint64, resp *http.Response
 			rw.Header().Add(k, v)
 		}
 	}
+	rw.WriteHeader(http.StatusOK)
 
 	_, ioErr := io.Copy(rw, resp.Body)
 	return ioErr
@@ -863,11 +878,6 @@ func (a *agent) runHot(ctx context.Context, caller slotCaller, call *call, tok R
 	}
 
 	cookie, err = a.driver.CreateCookie(ctx, container)
-	if tryQueueErr(err, errQueue) != nil {
-		return
-	}
-
-	err = cookie.AuthImage(ctx)
 	if tryQueueErr(err, errQueue) != nil {
 		return
 	}
@@ -1153,6 +1163,7 @@ type container struct {
 	iofs       iofs
 	logCfg     drivers.LoggerConfig
 	close      func()
+	dockerAuth dockerdriver.Auther
 
 	stderr io.Writer
 
@@ -1220,6 +1231,7 @@ func newHotContainer(ctx context.Context, call *call, cfg *Config, id string, ud
 		tmpFsSize:  uint64(call.TmpFsSize),
 		disableNet: call.disableNet,
 		iofs:       iofs,
+		dockerAuth: call.dockerAuth,
 		logCfg: drivers.LoggerConfig{
 			URL: strings.TrimSpace(call.SyslogURL),
 			Tags: []drivers.LoggerTag{
@@ -1309,8 +1321,16 @@ func (c *container) WriteStat(ctx context.Context, stat drivers.Stat) {
 	c.swapMu.Unlock()
 }
 
+// assert we implement this at compile time
+var _ dockerdriver.Auther = new(container)
+
 // DockerAuth implements the docker.AuthConfiguration interface.
-func (c *container) DockerAuth() (*docker.AuthConfiguration, error) {
+func (c *container) DockerAuth(ctx context.Context, image string) (*docker.AuthConfiguration, error) {
+	if c.dockerAuth != nil {
+		return c.dockerAuth.DockerAuth(ctx, image)
+	}
+
+	// TODO(reed): kill this after using that
 	registryToken := c.extensions[RegistryToken]
 	if registryToken != "" {
 		return &docker.AuthConfiguration{

@@ -41,9 +41,6 @@ type Cookie interface {
 	// Unfreeze a frozen container to unpause frozen processes
 	Unfreeze(ctx context.Context) error
 
-	// Authenticate image. Returns non-nil error if auth fails.
-	AuthImage(ctx context.Context) error
-
 	// Validate/Inspect image. Returns true if the image needs
 	// to be pulled and non-nil error if validation/inspection fails.
 	ValidateImage(ctx context.Context) (bool, error)
@@ -258,11 +255,11 @@ type Config struct {
 	PreForkNetworks      string `json:"pre_fork_networks"`
 	MaxTmpFsInodes       uint64 `json:"max_tmpfs_inodes"`
 	EnableReadOnlyRootFs bool   `json:"enable_readonly_rootfs"`
-	MaxRetries           uint64 `json:"max_retries"`
 	ContainerLabelTag    string `json:"container_label_tag"`
 	InstanceId           string `json:"instance_id"`
 	ImageCleanMaxSize    uint64 `json:"image_clean_max_size"`
 	ImageCleanExemptTags string `json:"image_clean_exempt_tags"`
+	ImageEnableVolume    bool   `json:"image_enable_volume"`
 }
 
 func average(samples []Stat) (Stat, bool) {
