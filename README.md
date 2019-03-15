@@ -1,70 +1,33 @@
-<a id="top"></a>
 ![Fn Project](http://fnproject.io/images/fn-300x125.png)
 
-[![CircleCI](https://circleci.com/gh/fnproject/fn.svg?style=svg&circle-token=6a62ac329bc5b68b484157fbe88df7612ffd9ea0)](https://circleci.com/gh/fnproject/fn) [![GoDoc](https://godoc.org/github.com/fnproject/fn?status.svg)](https://godoc.org/github.com/fnproject/fn)
-[![Go Report Card](https://goreportcard.com/badge/github.com/fnproject/fn)](https://goreportcard.com/report/github.com/fnproject/fn)
+# fn-zeebe
+[Fn](https://fnproject.io/) Server with a built-in [Zeebe.io](http://zeebe.io/) extension
 
-## Welcome
-Fn is an event-driven, open source, [Functions-as-a-Service (FaaS)](https://github.com/fnproject/docs/blob/master/fn/general/introduction.md) compute platform that you can run anywhere. Some of its key features:
+**This is a prototype for a POC - it is not production ready!**
 
-* Open Source
-* Native Docker: use any Docker container as your Function
-* Supports all languages
-* Run anywhere
-  * Public, private and hybrid cloud
-  * Import Lambda functions and run them anywhere
-* Easy to use for developers
-* Easy to manage for operators
-* Written in Go
-* Simple yet powerful extensibility
+Features of the Zeebe extension:
+* Connects Fn functions to Zeebe to handle jobs. Each Fn function can be configured to handle a specific Zeebe job type.
+* Starts Zeebe job workers which subscribe to the configured Zeebe job types and invoke the configured Fn functions
+* Listens to the function deployment events to starts and stop the Zeebe job workers dynamically
+* Provides a minimal REST endpoint to show the overview of registered Zeebe job workers
 
-The fastest way to experience Fn is to follow the quickstart below, or you can jump right to our [full documentation](https://github.com/fnproject/docs), [API Docs](http://petstore.swagger.io/?url=https://raw.githubusercontent.com/fnproject/fn/master/docs/swagger_v2.yml), or hit us up in our [Slack Community](http://slack.fnproject.io) or [Community Page](https://github.com/fnproject/docs/blob/master/COMMUNITY.md)!
+# Requirements
+* [Zeebe](https://zeebe.io/) (tested using version 0.14.0)
+* [Fn CLI](https://github.com/fnproject/cli) (testet using version 0.5.40)
+* [Docker](https://www.docker.com/) (tested using Engine version 18.09.1)
 
-
-## Quickstart
-
-### Pre-requisites
-
-* Docker 17.10.0-ce or later installed and running
-* [Docker Hub](https://hub.docker.com/) account (or other Docker-compliant registry) (Not required for local development)
-* Logged into Registry: ie `docker login` (Not required for local development)
-
-### Install CLI tool
-
-The command line tool isn't required, but it makes things a lot easier. There are a few options to install it:
-
-#### Option 1. Homebrew - macOS
-
-If you're on a Mac and use [Homebrew](https://brew.sh/):
-
-Build mit Docker:
-```sh
-./buildFnserver
-```
-das Skript baut ein Docker-Image `artunsubasi/fnserver`
-Da das Bauen in einem Docker Container stattfindet, ist eine lokale Go-Installation nicht unbedingt notwendig.
-
-#### Option 2. Shell script - Linux and macOS
-
-This one works on Linux and macOS (partially on Windows).
-
-If you are running behind a proxy first set your http_proxy and https_proxy environment vars:
+# How to install the extension?
+The Zeebe extension is built in to this fork of the Fn Repository. Build a new custom docker image of the Fn Server including the Zeebe extension:
 
 ```sh
-docker/run
+docker build -t artunsubasi/fnserver .
 ```
-Die Docker Compose-Datei ist in dem obigen Repository so konfiguriert, dass der Docker Image `artunsubasi/fnserver` verwendet wird. D.h. der fnserver mit der Zeebe-Extension muss vorher gebaut werden. Der Fn Server wird in All-in-One-Modus gestartet und beinhaltet somit den API Server, den Load Balancer sowie einen Fn Runner Server im selben Container.
 
-This will download a shell script and execute it. If the script asks for a password, that is because it invokes sudo.
+_The intended way of installing Fn extensions is building an Fn Server using the Fn CLI and an `ext.yaml` file referencing the public repository of the Fn extension. There is a public repository of the Zeebe extension [here](https://github.com/ArtunSubasi/ext-zeebe). However, this method currently does not work at this time because of Go dependency conflicts._
 
+# Starting the Fn server with the extension
 
-#### Option 3. Download the bin - Linux, macOS and Windows
-
-Head over to our [releases](https://github.com/fnproject/cli/releases) and download it.
-
-### Run Fn Server
-
-First, start up an Fn server locally:
+Start the server using docker.
 
 ```sh
 docker run --rm -i --name fnserver \
@@ -74,71 +37,41 @@ docker run --rm -i --name fnserver \
     -v ./fn/data:/app/data  \
     -v /var/run/docker.sock:/var/run/docker.sock  \
     -p 8080:8080  \
-    artunsubasi/fnserver
+    imageuser/imagename
 ```
 
-This will start Fn in single server mode, using an embedded database and message queue. You can find all the
-configuration options [here](https://github.com/fnproject/docs/blob/master/fn/operate/options.md). If you are on Windows, check [here](https://github.com/fnproject/docs/blob/master/fn/operate/windows.md).
-If you are on a Linux system where the SELinux security policy is set to "Enforcing", such as Oracle Linux 7, check
-[here](https://github.com/fnproject/docs/blob/master/fn/operate/selinux.md).
+## Environment variables
+* FN_LB_URL: URL of the Fn Load Balancer. If using the all-in-one-mode, just point to the Fn server.
+* FN_API_SERVER_URL: URL of the Fn API Server. If using the all-in-one-mode, just point to the Fn server.
+* FN_ZEEBE_GATEWAY_URL: URL of the Zeebe Gateway (gRPC-Port)
 
-### Your First Function
 
-Functions are small but powerful blocks of code that generally do one simple thing. Forget about monoliths when using functions, just focus on the task that you want the function to perform. Our CLI tool will help you get started quickly.
+## Docker-Volumes
+* /app/data ist the database storing the deployed apps, functions, etc.
+* /var/run/docker.sock points to the Unix-Socket of the Docker-Daemon so that the Fn server can manage internal docker containers. This is needed because the Fn functions are startet within their own docker containers.
 
-Let's create your function. You can use any runtime (ie go, node, java, python, etc.) `hello` will be the name of your function as well as create a directory called `hello`. You can name your function anything.
+# Configuring Fn functions to handle Zeebe jobs
+Functions are configured to handle Zeebe jobs using the configuration parameter `zeebe_job_type` within the function configuration file `func.yaml`. An example of a function configuration:
 
-```sh
-fn init --runtime go hello
-cd hello
+```yaml
+schema_version: 20180708
+name: collectmoney
+version: 0.0.4
+runtime: go
+entrypoint: ./func
+format: http-stream
+config:
+  zeebe_job_type: payment-service
 ```
+In the above example, the function `collectmoney` is configured to handle Zeebe jobs with the type `payment-service`. As soon as the function is deployed to the Fn, the extension launches Zeebe job workers and starts listening for available Zeebe jobs of the `payment-service`.
 
-We need to create an "app" which acts as a top-level collection of functions and other elements:
+# Restrictions
+Fn functions which are configured to handle Zeebe jobs must return a Json object as a response. The POC does not provide an automatic output mapping. Therefore, other return types, including Json arrays as a root, lead to an incident in the corresponding Zeebe workflow instance.
 
-```sh
-fn create app myapp
-```
+# Fn Server modes
+Fn server can be built in different modes: all-in-one, load balancer, API server and Fn runner. The following documentation describes the usage for the all-in-one mode.
 
-Deploy your function: 
+/Users/artunsubasi/Software/fn-zeebe-integration/docker/local-config/iofs (geht)
+/Users/artunsubasi/Software/fn-zeebe-integration/docker/local-config/iofs1 (geht)
 
-```sh
-fn deploy --app myapp --local
-```
-
-Note: `--local` flag will skip the push to remote container registry making local development faster
-
-Now let's actually run your function using the `invoke` command:
-
-```sh
-fn invoke myapp hello
-```
-
-That's it! You just deployed and ran your first function! Try updating the function code in `func.go` (or .js, .java, etc.) then deploy it again to see the change.
-
-## Learn More
-
-* Visit [Fn tutorials](http://fnproject.io/tutorials) for step-by-step guides to creating apps with Fn. These tutorials range from introductory to more advanced.
-* See our [full documentation](https://github.com/fnproject/docs)
-* View our [YouTube Channel](https://www.youtube.com/channel/UCo3fJqEGRx9PW_ODXk3b1nw)
-* View our [API Docs](http://petstore.swagger.io/?url=https://raw.githubusercontent.com/fnproject/fn/master/docs/swagger_v2.yml)
-* Check out our sub-projects: [Flow](https://github.com/fnproject/flow), [UI](https://github.com/fnproject/ui), [FnLB](https://github.com/fnproject/lb)
-* For a full presentation with lots of content you can use in your own presentations, see [The Fn Project Presentation Master](http://deck.fnproject.io)
-
-
-## Get Help
-
-* [Ask your question on StackOverflow](https://stackoverflow.com/questions/tagged/fn) and tag it with `fn`
-
-## Get Involved
-
-* Join our [Slack Community](http://slack.fnproject.io)
-* See our new [Community Page](https://github.com/fnproject/docs/blob/master/COMMUNITY.md)
-* Learn how to [contribute](CONTRIBUTING.md)
-* Find [issues](https://github.com/fnproject/fn/issues) and become a contributor
-* Join us at one of our [Fn Events](http://events.fnproject.io) or even speak at one!
-* Coming in Q1'19: Regularly scheduled planning meetings for contributing to the Fn Project
-
-* [Blog](https://medium.com/fnproject)
-* [Twitter](https://twitter.com/fnproject)
-* [YouTube](https://www.youtube.com/channel/UCo3fJqEGRx9PW_ODXk3b1nw)
-* [Events](http://events.fnproject.io)
+/aVeryLongPathWithMoreThan74CharsLongLongLongLongLongLongLongLongLongLongLong
