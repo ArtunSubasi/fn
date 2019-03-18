@@ -30,6 +30,8 @@ func JobHandler(fnID string, loadBalancerHost string) worker.JobHandler {
             return
         }
 
+        logrus.Infof("Function invocation returned the response: %v. Job key: %v / fnID: %v\n", resp.Status, jobKey, fnID)
+
         if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
             logrus.Infof("Function invocation returned the HTTP status code %v. Job key: %v / fnID: %v\n", resp.Status, jobKey, fnID)
         } else {
