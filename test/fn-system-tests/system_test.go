@@ -45,6 +45,7 @@ const (
 
 	StatusImage       = "fnproject/fn-status-checker:latest"
 	StatusBarrierFile = "./barrier_file.txt"
+	ConfigFile        = "./config_file.txt"
 )
 
 var (
@@ -348,6 +349,7 @@ func SetUpPureRunnerNode(ctx context.Context, nodeNum int, StatusBarrierFile str
 		agent.PureRunnerWithDetached(),
 		agent.PureRunnerWithGRPCServerOptions(grpcOpts...),
 		agent.PureRunnerWithStatusNetworkEnabler(StatusBarrierFile),
+		agent.PureRunnerWithConfigPath(ConfigFile),
 	)
 	if err != nil {
 		return nil, err
@@ -405,7 +407,7 @@ func TestMain(m *testing.M) {
 }
 
 // Memory Only LB Agent Call Option
-func LBCallOverrider(c *models.Call, exts map[string]string) (map[string]string, error) {
+func LBCallOverrider(req *http.Request, c *models.Call, exts map[string]string) (map[string]string, error) {
 
 	// Set TmpFsSize and CPU to unlimited. This means LB operates on Memory
 	// only. Operators/Service providers are expected to override this
@@ -425,7 +427,7 @@ func LBCallOverrider(c *models.Call, exts map[string]string) (map[string]string,
 }
 
 // Pure Runner Agent Call Option
-func PureRunnerCallOverrider(c *models.Call, exts map[string]string) (map[string]string, error) {
+func PureRunnerCallOverrider(req *http.Request, c *models.Call, exts map[string]string) (map[string]string, error) {
 
 	if exts == nil {
 		exts = make(map[string]string)
@@ -473,8 +475,8 @@ func (d *customDriver) CreateCookie(ctx context.Context, task drivers.ContainerT
 }
 
 // implements Driver
-func (d *customDriver) PrepareCookie(ctx context.Context, cookie drivers.Cookie) error {
-	return d.drv.PrepareCookie(ctx, cookie)
+func (d *customDriver) SetPullImageRetryPolicy(policy common.BackOffConfig, checker drivers.RetryErrorChecker) error {
+	return d.drv.SetPullImageRetryPolicy(policy, checker)
 }
 
 // implements Driver

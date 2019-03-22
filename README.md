@@ -70,8 +70,3 @@ Fn functions which are configured to handle Zeebe jobs must return a Json object
 
 # Fn Server modes
 Fn server can be built in different modes: all-in-one, load balancer, API server and Fn runner. The following documentation describes the usage for the all-in-one mode.
-
-/Users/artunsubasi/Software/fn-zeebe-integration/docker/local-config/iofs (geht)
-/Users/artunsubasi/Software/fn-zeebe-integration/docker/local-config/iofs1 (geht)
-
-/aVeryLongPathWithMoreThan74CharsLongLongLongLongLongLongLongLongLongLongLong

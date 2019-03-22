@@ -65,7 +65,8 @@ type DockerDriver struct {
 
 	instanceId string
 
-	imgCache ImageCacher
+	imgCache  ImageCacher
+	imgPuller ImagePuller
 }
 
 // NewDocker implements drivers.Driver
@@ -119,6 +120,8 @@ func NewDocker(conf drivers.Config) *DockerDriver {
 	if err != nil {
 		logrus.WithError(err).Fatalf("cannot load docker images in %s", conf.DockerLoadFile)
 	}
+
+	driver.imgPuller = NewImagePuller(driver.docker)
 
 	// finally spawn pool if enabled
 	if conf.PreForkPoolSize != 0 {
@@ -356,9 +359,8 @@ func (drv *DockerDriver) Close() error {
 	return err
 }
 
-// Obsoleted.
-func (drv *DockerDriver) PrepareCookie(ctx context.Context, cookie drivers.Cookie) error {
-	return nil
+func (drv *DockerDriver) SetPullImageRetryPolicy(policy common.BackOffConfig, checker drivers.RetryErrorChecker) error {
+	return drv.imgPuller.SetRetryPolicy(policy, checker)
 }
 
 func (drv *DockerDriver) CreateCookie(ctx context.Context, task drivers.ContainerTask) (drivers.Cookie, error) {
