@@ -49,12 +49,12 @@ func (zeebe *Zeebe) Setup(s fnext.ExtServer) error {
 	server := s.(*server.Server)
 
 	jobWorkerRegistry := NewJobWorkerRegistry(loadBalancerAddr, zeebeGatewayAddr)
-	server.AddFnListener(&FnListener{&jobWorkerRegistry})
+	server.AddFnListener(&FnListener{&jobWorkerRegistry, apiServerAddr})
 	// TODO we will eventually need an App Listener as well. Because if an App gets deleted, all functions within are deleted as well.
 	// In this case, all Job workers of the app have to be stopped.
 
 	s.AddEndpoint("GET", "/zeebe", &zeebeEndpointHandler{apiServerAddr})
-
+	
 	go zeebe.waitAndRegisterFunctions(&jobWorkerRegistry, apiServerAddr)
 	logrus.Infoln("Zeebe extension startet!")
 	return nil
@@ -67,6 +67,6 @@ func (zeebe *Zeebe) waitAndRegisterFunctions(jobWorkerRegistry *JobWorkerRegistr
 	time.Sleep(1 * time.Second)
 	functionsWithZeebeJobType := GetFunctionsWithZeebeJobType(apiServerAddr)
 	for _, fn := range functionsWithZeebeJobType {
-		jobWorkerRegistry.RegisterFunctionAsWorker(fn.fnID, fn.jobType)
+		jobWorkerRegistry.RegisterFunctionAsWorker(fn)
 	}
 }

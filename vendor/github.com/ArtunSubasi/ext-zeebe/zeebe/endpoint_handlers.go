@@ -19,7 +19,8 @@ func (h *zeebeEndpointHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		fmt.Fprintf(w, "N/A\n")
 	} else {
 		for _, fn := range functionsWithZeebeJobType {
-			fmt.Fprintf(w, "Fn Function-ID %q -> Zeebe Job Type: %q\n", fn.fnID, fn.jobType)
+			fmt.Fprintf(w, "Fn Function-ID %q -> Zeebe Job Type: %q | Trigger-ID: %q | Trigger-Path: %q \n", 
+				fn.fnID, fn.jobType, fn.triggerID, fn.triggerSource)
 		}
 	}
 	
