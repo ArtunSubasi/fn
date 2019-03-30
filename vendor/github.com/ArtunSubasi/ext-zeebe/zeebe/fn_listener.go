@@ -62,6 +62,6 @@ func (fnListener *FnListener) waitAndRegisterTriggers(fn *models.Fn, jobType str
 		fnZeebe := &FnTriggerWithZeebeJobType{fn.ID, app.Name, trigger.ID, trigger.Name, trigger.Source, jobType}
 		fnListener.jobWorkerRegistry.RegisterFunctionAsWorker(fnZeebe)
 	} else {
-		logrus.Infof("The function %v defines a Zeebe job type but does not have a trigger. Function ID: %v\n", fn.Name, fn.ID)
+		logrus.Infof("The function %v defines a Zeebe job type but does not have a trigger. Function ID: %v", fn.Name, fn.ID)
 	}
 }

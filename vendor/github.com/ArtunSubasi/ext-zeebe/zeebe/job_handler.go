@@ -19,30 +19,29 @@ func JobHandler(fnZeebe *FnTriggerWithZeebeJobType, loadBalancerHost string) wor
         jobKey := job.GetKey()
 
         // TODO refactor: extract function invocation as a separate function
-        logrus.Infoln("Invoking function", fnZeebe.fnID)
-        invocationUrl := loadBalancerHost + "/t/" + fnZeebe.appName + "/" + fnZeebe.triggerName
-        logrus.Debugln("InvocationUrl:", invocationUrl)
+        invocationUrl := loadBalancerHost + "/t/" + fnZeebe.appName + fnZeebe.triggerSource
+        logrus.Infoln("Invoking function", fnZeebe.fnID, "/ InvocationUrl:", invocationUrl)
         logrus.Debugln("Payload:", job.Payload)
         resp, err := http.Post(invocationUrl, "application/json", bytes.NewBuffer([]byte(job.Payload)))
         if err != nil {
-            logrus.Errorf("Failed to send the post request for job key %v / error: %v\n", jobKey, err)
+            logrus.Errorf("Failed to send the post request for job key %v / error: %v", jobKey, err)
             failJob(client, job)
             return
         }
 
-        logrus.Infof("Function invocation returned the response: %v. Job key: %v / fnID: %v\n", resp.Status, jobKey, fnZeebe.fnID)
+        logrus.Infof("Function invocation returned the response: %v. Job key: %v / fnID: %v", resp.Status, jobKey, fnZeebe.fnID)
 
         if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
-            logrus.Infof("Function invocation returned the HTTP status code %v. Job key: %v / fnID: %v\n", resp.Status, jobKey, fnZeebe.fnID)
+            logrus.Infof("Function invocation returned the HTTP status code %v. Job key: %v / fnID: %v", resp.Status, jobKey, fnZeebe.fnID)
         } else {
-            logrus.Infof("Function invocation returned the HTTP status code %v. Failing job. Job key: %v / fnID: %v\n", resp.Status, jobKey, fnZeebe.fnID)
+            logrus.Infof("Function invocation returned the HTTP status code %v. Failing job. Job key: %v / fnID: %v", resp.Status, jobKey, fnZeebe.fnID)
             failJob(client, job)
             return
         }
 
         body, err := ioutil.ReadAll(resp.Body)
         if err != nil {
-            logrus.Errorf("Failed to read the body after invoking function. Failing job. Job key: %v / fnID: %v\n", jobKey, fnZeebe.fnID)
+            logrus.Errorf("Failed to read the body after invoking function. Failing job. Job key: %v / fnID: %v", jobKey, fnZeebe.fnID)
             failJob(client, job)
             return
         }
@@ -59,7 +58,7 @@ func JobHandler(fnZeebe *FnTriggerWithZeebeJobType, loadBalancerHost string) wor
 
         request, err := client.NewCompleteJobCommand().JobKey(jobKey).PayloadFromObject(responseJsonObject) 
         if err != nil {
-            logrus.Errorf("Failed to set the updated payload. Failing job. Job key: %v / fnID: %v\n", jobKey, fnZeebe.fnID)
+            logrus.Errorf("Failed to set the updated payload. Failing job. Job key: %v / fnID: %v", jobKey, fnZeebe.fnID)
             failJob(client, job)
             return
         }

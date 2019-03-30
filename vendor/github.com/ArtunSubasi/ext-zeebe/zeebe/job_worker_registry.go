@@ -26,7 +26,7 @@ func (jobWorkerRegistry *JobWorkerRegistry) RegisterFunctionAsWorker(fnZeebe *Fn
 	if err != nil {
 		panic(err)
 	}
-	logrus.Infof("Creating a Zeebe job worker of type %v for function ID %v\n", fnZeebe.jobType, fnZeebe.fnID)
+	logrus.Infof("Creating a Zeebe job worker of type %v for function ID %v", fnZeebe.jobType, fnZeebe.fnID)
 	jobHandler := JobHandler(fnZeebe, jobWorkerRegistry.loadBalancerAddr)
 	// TODO Add more configuration possibilities for the worker (Poll Interval, Timeout, ...)
 	jobWorkerRegistry.jobWorkers[fnZeebe.fnID] = client.NewJobWorker().JobType(fnZeebe.jobType).Handler(jobHandler).PollInterval(1 * time.Second).Open()

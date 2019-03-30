@@ -27,11 +27,11 @@ func GetFunctionsWithZeebeJobType(apiServerHost string) []*FnTriggerWithZeebeJob
 	functionsWithZeebeJobType := make([]*FnTriggerWithZeebeJobType, 0)
 	appList := getApps(apiServerHost)
 	for _, app := range appList.Items {
-		logrus.Debugf("App-ID %v / App-Name: %v\n", app.ID, app.Name)
+		logrus.Debugf("App-ID %v / App-Name: %v", app.ID, app.Name)
 		fnList := getFunctions(apiServerHost, app.ID)
 		// TODO too many loops, too many lines -> refactor, extract the functions
 		for _, fn := range fnList.Items {
-			logrus.Debugf("Fn-ID %v / Fn-Name: %v\n", fn.ID, fn.Name)
+			logrus.Debugf("Fn-ID %v / Fn-Name: %v", fn.ID, fn.Name)
 			jobType, hasJobType := GetZeebeJobType(fn)
 			if hasJobType {
 				trigger, hasTrigger := GetTrigger(apiServerHost, fn)
@@ -39,7 +39,7 @@ func GetFunctionsWithZeebeJobType(apiServerHost string) []*FnTriggerWithZeebeJob
 					functionsWithZeebeJobType = append(functionsWithZeebeJobType, 
 						&FnTriggerWithZeebeJobType{fn.ID, app.Name, trigger.ID, trigger.Name, trigger.Source, jobType})
 				} else {
-					logrus.Infof("The function %v defines a Zeebe job type but does not have a trigger. Function ID: %v\n", fn.Name, fn.ID)
+					logrus.Infof("The function %v defines a Zeebe job type but does not have a trigger. Function ID: %v", fn.Name, fn.ID)
 				}
 			} else {
 				logrus.Infoln("No Zeebe job type configuration found. Function ID: ", fn.ID)
@@ -48,7 +48,7 @@ func GetFunctionsWithZeebeJobType(apiServerHost string) []*FnTriggerWithZeebeJob
 	}
 
 	for _, fn := range functionsWithZeebeJobType {
-		logrus.Infof("Registered triggers: %v\n", fn)
+		logrus.Infof("Registered triggers: %v", fn)
 	}
 
 	return functionsWithZeebeJobType
