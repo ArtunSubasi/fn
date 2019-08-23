@@ -1,50 +1,39 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.test.exporter.record;
 
-import io.zeebe.exporter.record.Record;
-import java.time.Instant;
+import io.zeebe.protocol.record.Record;
+import io.zeebe.protocol.record.RecordType;
+import io.zeebe.protocol.record.RejectionType;
+import io.zeebe.protocol.record.ValueType;
+import io.zeebe.protocol.record.intent.Intent;
 import java.util.Objects;
 
 public class MockRecord extends ExporterMappedObject implements Record, Cloneable {
 
   private long position = 0;
-  private int raftTerm = 0;
   private long sourceRecordPosition = -1;
-  private int producerId = 0;
   private long key = -1;
-  private Instant timestamp = Instant.now();
+  private long timestamp = -1;
   private MockRecordMetadata metadata = new MockRecordMetadata();
-  private MockRecordValueWithPayload value = new MockRecordValueWithPayload();
+  private MockRecordValueWithVariables value = new MockRecordValueWithVariables();
 
   public MockRecord() {}
 
   public MockRecord(
       long position,
-      int raftTerm,
       long sourceRecordPosition,
-      int producerId,
       long key,
-      Instant timestamp,
+      long timestamp,
       MockRecordMetadata metadata,
-      MockRecordValueWithPayload value) {
+      MockRecordValueWithVariables value) {
     this.position = position;
-    this.raftTerm = raftTerm;
     this.sourceRecordPosition = sourceRecordPosition;
-    this.producerId = producerId;
     this.key = key;
     this.timestamp = timestamp;
     this.metadata = metadata;
@@ -62,32 +51,12 @@ public class MockRecord extends ExporterMappedObject implements Record, Cloneabl
   }
 
   @Override
-  public int getRaftTerm() {
-    return raftTerm;
-  }
-
-  public MockRecord setRaftTerm(int raftTerm) {
-    this.raftTerm = raftTerm;
-    return this;
-  }
-
-  @Override
   public long getSourceRecordPosition() {
     return sourceRecordPosition;
   }
 
   public MockRecord setSourceRecordPosition(long sourceRecordPosition) {
     this.sourceRecordPosition = sourceRecordPosition;
-    return this;
-  }
-
-  @Override
-  public int getProducerId() {
-    return producerId;
-  }
-
-  public MockRecord setProducerId(int producerId) {
-    this.producerId = producerId;
     return this;
   }
 
@@ -102,16 +71,45 @@ public class MockRecord extends ExporterMappedObject implements Record, Cloneabl
   }
 
   @Override
-  public Instant getTimestamp() {
+  public long getTimestamp() {
     return timestamp;
   }
 
-  public MockRecord setTimestamp(Instant timestamp) {
+  @Override
+  public Intent getIntent() {
+    return metadata.getIntent();
+  }
+
+  @Override
+  public int getPartitionId() {
+    return metadata.getPartitionId();
+  }
+
+  @Override
+  public RecordType getRecordType() {
+    return metadata.getRecordType();
+  }
+
+  @Override
+  public RejectionType getRejectionType() {
+    return metadata.getRejectionType();
+  }
+
+  @Override
+  public String getRejectionReason() {
+    return metadata.getRejectionReason();
+  }
+
+  @Override
+  public ValueType getValueType() {
+    return metadata.getValueType();
+  }
+
+  public MockRecord setTimestamp(long timestamp) {
     this.timestamp = timestamp;
     return this;
   }
 
-  @Override
   public MockRecordMetadata getMetadata() {
     return metadata;
   }
@@ -122,11 +120,11 @@ public class MockRecord extends ExporterMappedObject implements Record, Cloneabl
   }
 
   @Override
-  public MockRecordValueWithPayload getValue() {
+  public MockRecordValueWithVariables getValue() {
     return value;
   }
 
-  public MockRecord setValue(MockRecordValueWithPayload value) {
+  public MockRecord setValue(MockRecordValueWithVariables value) {
     this.value = value;
     return this;
   }
@@ -136,12 +134,8 @@ public class MockRecord extends ExporterMappedObject implements Record, Cloneabl
     return "MockRecord{"
         + "position="
         + position
-        + ", raftTerm="
-        + raftTerm
         + ", sourceRecordPosition="
         + sourceRecordPosition
-        + ", producerId="
-        + producerId
         + ", key="
         + key
         + ", timestamp="
@@ -164,9 +158,7 @@ public class MockRecord extends ExporterMappedObject implements Record, Cloneabl
 
     final MockRecord record = (MockRecord) o;
     return getPosition() == record.getPosition()
-        && getRaftTerm() == record.getRaftTerm()
         && getSourceRecordPosition() == record.getSourceRecordPosition()
-        && getProducerId() == record.getProducerId()
         && getKey() == record.getKey()
         && Objects.equals(getTimestamp(), record.getTimestamp())
         && Objects.equals(getMetadata(), record.getMetadata())
@@ -177,9 +169,7 @@ public class MockRecord extends ExporterMappedObject implements Record, Cloneabl
   public int hashCode() {
     return Objects.hash(
         getPosition(),
-        getRaftTerm(),
         getSourceRecordPosition(),
-        getProducerId(),
         getKey(),
         getTimestamp(),
         getMetadata(),

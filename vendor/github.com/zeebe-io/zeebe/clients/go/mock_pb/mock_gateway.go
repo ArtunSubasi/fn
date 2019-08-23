@@ -144,42 +144,6 @@ func (mr *MockGatewayClientMockRecorder) FailJob(arg0, arg1 interface{}, arg2 ..
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FailJob", reflect.TypeOf((*MockGatewayClient)(nil).FailJob), varargs...)
 }
 
-// GetWorkflow mocks base method
-func (m *MockGatewayClient) GetWorkflow(arg0 context.Context, arg1 *pb.GetWorkflowRequest, arg2 ...grpc.CallOption) (*pb.GetWorkflowResponse, error) {
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "GetWorkflow", varargs...)
-	ret0, _ := ret[0].(*pb.GetWorkflowResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetWorkflow indicates an expected call of GetWorkflow
-func (mr *MockGatewayClientMockRecorder) GetWorkflow(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkflow", reflect.TypeOf((*MockGatewayClient)(nil).GetWorkflow), varargs...)
-}
-
-// ListWorkflows mocks base method
-func (m *MockGatewayClient) ListWorkflows(arg0 context.Context, arg1 *pb.ListWorkflowsRequest, arg2 ...grpc.CallOption) (*pb.ListWorkflowsResponse, error) {
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "ListWorkflows", varargs...)
-	ret0, _ := ret[0].(*pb.ListWorkflowsResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListWorkflows indicates an expected call of ListWorkflows
-func (mr *MockGatewayClientMockRecorder) ListWorkflows(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListWorkflows", reflect.TypeOf((*MockGatewayClient)(nil).ListWorkflows), varargs...)
-}
-
 // PublishMessage mocks base method
 func (m *MockGatewayClient) PublishMessage(arg0 context.Context, arg1 *pb.PublishMessageRequest, arg2 ...grpc.CallOption) (*pb.PublishMessageResponse, error) {
 	varargs := []interface{}{arg0, arg1}
@@ -216,6 +180,24 @@ func (mr *MockGatewayClientMockRecorder) ResolveIncident(arg0, arg1 interface{},
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveIncident", reflect.TypeOf((*MockGatewayClient)(nil).ResolveIncident), varargs...)
 }
 
+// SetVariables mocks base method
+func (m *MockGatewayClient) SetVariables(arg0 context.Context, arg1 *pb.SetVariablesRequest, arg2 ...grpc.CallOption) (*pb.SetVariablesResponse, error) {
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SetVariables", varargs...)
+	ret0, _ := ret[0].(*pb.SetVariablesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetVariables indicates an expected call of SetVariables
+func (mr *MockGatewayClientMockRecorder) SetVariables(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetVariables", reflect.TypeOf((*MockGatewayClient)(nil).SetVariables), varargs...)
+}
+
 // Topology mocks base method
 func (m *MockGatewayClient) Topology(arg0 context.Context, arg1 *pb.TopologyRequest, arg2 ...grpc.CallOption) (*pb.TopologyResponse, error) {
 	varargs := []interface{}{arg0, arg1}
@@ -250,24 +232,6 @@ func (m *MockGatewayClient) UpdateJobRetries(arg0 context.Context, arg1 *pb.Upda
 func (mr *MockGatewayClientMockRecorder) UpdateJobRetries(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
 	varargs := append([]interface{}{arg0, arg1}, arg2...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateJobRetries", reflect.TypeOf((*MockGatewayClient)(nil).UpdateJobRetries), varargs...)
-}
-
-// UpdateWorkflowInstancePayload mocks base method
-func (m *MockGatewayClient) UpdateWorkflowInstancePayload(arg0 context.Context, arg1 *pb.UpdateWorkflowInstancePayloadRequest, arg2 ...grpc.CallOption) (*pb.UpdateWorkflowInstancePayloadResponse, error) {
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "UpdateWorkflowInstancePayload", varargs...)
-	ret0, _ := ret[0].(*pb.UpdateWorkflowInstancePayloadResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdateWorkflowInstancePayload indicates an expected call of UpdateWorkflowInstancePayload
-func (mr *MockGatewayClientMockRecorder) UpdateWorkflowInstancePayload(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateWorkflowInstancePayload", reflect.TypeOf((*MockGatewayClient)(nil).UpdateWorkflowInstancePayload), varargs...)
 }
 
 // MockGateway_ActivateJobsClient is a mock of Gateway_ActivateJobsClient interface

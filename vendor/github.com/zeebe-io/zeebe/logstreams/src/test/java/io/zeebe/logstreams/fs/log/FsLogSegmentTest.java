@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.logstreams.fs.log;
 
@@ -48,7 +40,7 @@ public class FsLogSegmentTest {
   private FsLogSegment fsLogSegment;
 
   @Before
-  public void init() throws IOException {
+  public void init() {
     logPath = tempFolder.getRoot().getAbsolutePath();
 
     logFileName = new File(logPath, "test-log-segment.data").getAbsolutePath();
@@ -85,10 +77,8 @@ public class FsLogSegmentTest {
   }
 
   @Test
-  public void shouldAllocateSegment() {
-    final boolean isAllocated = fsLogSegment.allocate(1, CAPACITY);
-
-    assertThat(isAllocated).isTrue();
+  public void shouldAllocateSegment() throws IOException {
+    fsLogSegment.allocate(1, CAPACITY);
 
     assertThat(fsLogSegment.getSegmentId()).isEqualTo(1);
     assertThat(fsLogSegment.getCapacity()).isEqualTo(CAPACITY);
@@ -96,7 +86,7 @@ public class FsLogSegmentTest {
   }
 
   @Test
-  public void shouldAppendBlock() {
+  public void shouldAppendBlock() throws IOException {
     fsLogSegment.allocate(1, CAPACITY);
     final int previousSize = fsLogSegment.getSize();
 
@@ -112,33 +102,41 @@ public class FsLogSegmentTest {
   }
 
   @Test
-  public void shouldNotAppendBlockIfSizeGreaterThanCapacity() {
+  public void shouldThrowExceptionWhenBlockSizeIsGreaterThanCapacity() throws IOException {
+    // given
     fsLogSegment.allocate(1, CAPACITY);
 
     final byte[] largeBlock = new byte[CAPACITY + 1];
     new Random().nextBytes(largeBlock);
 
-    final int result = fsLogSegment.append(ByteBuffer.wrap(largeBlock));
+    // expect
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage(
+        "Expected to append block with size 16385, but actual capacity is insufficient 12288.");
 
-    assertThat(result).isEqualTo(FsLogSegment.INSUFFICIENT_CAPACITY);
+    // when
+    fsLogSegment.append(ByteBuffer.wrap(largeBlock));
   }
 
   @Test
-  public void shouldNotAppendBlockIfSizeGreaterThanRemainingCapacity() {
+  public void shouldThrowExceptionWhenBlockSizeIsGreaterThanRemainingCapacity() throws IOException {
+    // given
     fsLogSegment.allocate(1, CAPACITY);
-
     fsLogSegment.append(ByteBuffer.wrap(MSG));
-
     final byte[] largeBlock = new byte[CAPACITY];
     new Random().nextBytes(largeBlock);
 
-    final int result = fsLogSegment.append(ByteBuffer.wrap(largeBlock));
+    // expect
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage(
+        "Expected to append block with size 16384, but actual capacity is insufficient 12284.");
 
-    assertThat(result).isEqualTo(FsLogSegment.INSUFFICIENT_CAPACITY);
+    // when
+    fsLogSegment.append(ByteBuffer.wrap(largeBlock));
   }
 
   @Test
-  public void shouldReadAppendedBlock() {
+  public void shouldReadAppendedBlock() throws IOException {
     fsLogSegment.allocate(1, CAPACITY);
 
     final int offset = fsLogSegment.append(ByteBuffer.wrap(MSG));
@@ -152,7 +150,7 @@ public class FsLogSegmentTest {
   }
 
   @Test
-  public void shouldReadPartOfAppendedBlock() {
+  public void shouldReadPartOfAppendedBlock() throws IOException {
     fsLogSegment.allocate(1, CAPACITY);
 
     final int offset = fsLogSegment.append(ByteBuffer.wrap(MSG));
@@ -166,7 +164,7 @@ public class FsLogSegmentTest {
   }
 
   @Test
-  public void shouldNotReadBlockIfOfferLessThanMetaDataLength() {
+  public void shouldNotReadBlockIfOfferLessThanMetaDataLength() throws IOException {
     fsLogSegment.allocate(1, CAPACITY);
 
     final ByteBuffer readBuffer = ByteBuffer.allocate(MSG.length);
@@ -177,7 +175,7 @@ public class FsLogSegmentTest {
   }
 
   @Test
-  public void shouldNotReadBlockIfOfferGreaterThanSize() {
+  public void shouldNotReadBlockIfOfferGreaterThanSize() throws IOException {
     fsLogSegment.allocate(1, CAPACITY);
 
     final int currentSize = fsLogSegment.getSize();
@@ -190,7 +188,7 @@ public class FsLogSegmentTest {
   }
 
   @Test
-  public void shouldNotReadBlockIfNoData() {
+  public void shouldNotReadBlockIfNoData() throws IOException {
     fsLogSegment.allocate(1, CAPACITY);
 
     final int currentSize = fsLogSegment.getSize();
@@ -203,7 +201,7 @@ public class FsLogSegmentTest {
   }
 
   @Test
-  public void shouldNotReadBlockIfFilled() {
+  public void shouldNotReadBlockIfFilled() throws IOException {
     fsLogSegment.allocate(1, CAPACITY);
     fsLogSegment.setFilled();
 
@@ -217,7 +215,7 @@ public class FsLogSegmentTest {
   }
 
   @Test
-  public void shouldNotReadBlockIfBufferHasNoRemainingCapacity() {
+  public void shouldNotReadBlockIfBufferHasNoRemainingCapacity() throws IOException {
     fsLogSegment.allocate(1, CAPACITY);
 
     final int offset = fsLogSegment.append(ByteBuffer.wrap(MSG));

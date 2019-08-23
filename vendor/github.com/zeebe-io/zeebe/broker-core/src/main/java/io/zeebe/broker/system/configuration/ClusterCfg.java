@@ -1,21 +1,13 @@
 /*
- * Zeebe Broker Core
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.broker.system.configuration;
+
+import static io.zeebe.protocol.Protocol.START_PARTITION_ID;
 
 import io.zeebe.util.Environment;
 import java.util.Collections;
@@ -28,6 +20,7 @@ public class ClusterCfg implements ConfigurationEntry {
   public static final int DEFAULT_PARTITIONS_COUNT = 1;
   public static final int DEFAULT_REPLICATION_FACTOR = 1;
   public static final int DEFAULT_CLUSTER_SIZE = 1;
+  public static final String DEFAULT_CLUSTER_NAME = "zeebe-cluster";
 
   private List<String> initialContactPoints = DEFAULT_CONTACT_POINTS;
 
@@ -36,6 +29,7 @@ public class ClusterCfg implements ConfigurationEntry {
   private int partitionsCount = DEFAULT_PARTITIONS_COUNT;
   private int replicationFactor = DEFAULT_REPLICATION_FACTOR;
   private int clusterSize = DEFAULT_CLUSTER_SIZE;
+  private String clusterName = DEFAULT_CLUSTER_NAME;
 
   @Override
   public void init(
@@ -47,7 +41,7 @@ public class ClusterCfg implements ConfigurationEntry {
 
   private void initPartitionIds() {
     final IntArrayList list = new IntArrayList();
-    for (int i = 0; i < partitionsCount; i++) {
+    for (int i = START_PARTITION_ID; i < START_PARTITION_ID + partitionsCount; i++) {
       final int partitionId = i;
       list.add(partitionId);
     }
@@ -58,6 +52,7 @@ public class ClusterCfg implements ConfigurationEntry {
   private void applyEnvironment(final Environment environment) {
     environment.getInt(EnvironmentConstants.ENV_NODE_ID).ifPresent(v -> nodeId = v);
     environment.getInt(EnvironmentConstants.ENV_CLUSTER_SIZE).ifPresent(v -> clusterSize = v);
+    environment.get(EnvironmentConstants.ENV_CLUSTER_NAME).ifPresent(v -> clusterName = v);
     environment
         .getInt(EnvironmentConstants.ENV_PARTITIONS_COUNT)
         .ifPresent(v -> partitionsCount = v);
@@ -111,6 +106,14 @@ public class ClusterCfg implements ConfigurationEntry {
 
   public void setClusterSize(final int clusterSize) {
     this.clusterSize = clusterSize;
+  }
+
+  public String getClusterName() {
+    return clusterName;
+  }
+
+  public void setClusterName(String clusterName) {
+    this.clusterName = clusterName;
   }
 
   @Override

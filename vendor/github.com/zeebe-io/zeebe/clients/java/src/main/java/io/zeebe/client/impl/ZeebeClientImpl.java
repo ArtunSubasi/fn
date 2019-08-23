@@ -20,36 +20,35 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.zeebe.client.ZeebeClient;
 import io.zeebe.client.ZeebeClientConfiguration;
-import io.zeebe.client.api.clients.JobClient;
-import io.zeebe.client.api.commands.ActivateJobsCommandStep1;
-import io.zeebe.client.api.commands.CancelWorkflowInstanceCommandStep1;
-import io.zeebe.client.api.commands.CompleteJobCommandStep1;
-import io.zeebe.client.api.commands.CreateWorkflowInstanceCommandStep1;
-import io.zeebe.client.api.commands.DeployWorkflowCommandStep1;
-import io.zeebe.client.api.commands.FailJobCommandStep1;
-import io.zeebe.client.api.commands.PublishMessageCommandStep1;
-import io.zeebe.client.api.commands.ResolveIncidentCommandStep1;
-import io.zeebe.client.api.commands.TopologyRequestStep1;
-import io.zeebe.client.api.commands.UpdatePayloadWorkflowInstanceCommandStep1;
-import io.zeebe.client.api.commands.UpdateRetriesJobCommandStep1;
-import io.zeebe.client.api.commands.WorkflowRequestStep1;
-import io.zeebe.client.api.commands.WorkflowResourceRequestStep1;
-import io.zeebe.client.api.subscription.JobWorkerBuilderStep1;
-import io.zeebe.client.cmd.ClientException;
-import io.zeebe.client.impl.job.ActivateJobsCommandImpl;
-import io.zeebe.client.impl.job.JobUpdateRetriesCommandImpl;
-import io.zeebe.client.impl.subscription.JobWorkerBuilderImpl;
-import io.zeebe.client.impl.workflow.CancelWorkflowInstanceCommandImpl;
-import io.zeebe.client.impl.workflow.CreateWorkflowInstanceCommandImpl;
-import io.zeebe.client.impl.workflow.DeployWorkflowCommandImpl;
-import io.zeebe.client.impl.workflow.GetWorkflowCommandImpl;
-import io.zeebe.client.impl.workflow.ListWorkflowsCommandImpl;
-import io.zeebe.client.impl.workflow.PublishMessageCommandImpl;
-import io.zeebe.client.impl.workflow.ResolveIncidentCommandImpl;
-import io.zeebe.client.impl.workflow.UpdateWorkflowInstancePayloadCommandImpl;
+import io.zeebe.client.api.command.ActivateJobsCommandStep1;
+import io.zeebe.client.api.command.CancelWorkflowInstanceCommandStep1;
+import io.zeebe.client.api.command.ClientException;
+import io.zeebe.client.api.command.CompleteJobCommandStep1;
+import io.zeebe.client.api.command.CreateWorkflowInstanceCommandStep1;
+import io.zeebe.client.api.command.DeployWorkflowCommandStep1;
+import io.zeebe.client.api.command.FailJobCommandStep1;
+import io.zeebe.client.api.command.PublishMessageCommandStep1;
+import io.zeebe.client.api.command.ResolveIncidentCommandStep1;
+import io.zeebe.client.api.command.SetVariablesCommandStep1;
+import io.zeebe.client.api.command.TopologyRequestStep1;
+import io.zeebe.client.api.command.UpdateRetriesJobCommandStep1;
+import io.zeebe.client.api.worker.JobClient;
+import io.zeebe.client.api.worker.JobWorkerBuilderStep1;
+import io.zeebe.client.impl.command.ActivateJobsCommandImpl;
+import io.zeebe.client.impl.command.CancelWorkflowInstanceCommandImpl;
+import io.zeebe.client.impl.command.CreateWorkflowInstanceCommandImpl;
+import io.zeebe.client.impl.command.DeployWorkflowCommandImpl;
+import io.zeebe.client.impl.command.JobUpdateRetriesCommandImpl;
+import io.zeebe.client.impl.command.PublishMessageCommandImpl;
+import io.zeebe.client.impl.command.ResolveIncidentCommandImpl;
+import io.zeebe.client.impl.command.SetVariablesCommandImpl;
+import io.zeebe.client.impl.command.TopologyRequestImpl;
+import io.zeebe.client.impl.worker.JobClientImpl;
+import io.zeebe.client.impl.worker.JobWorkerBuilderImpl;
 import io.zeebe.gateway.protocol.GatewayGrpc;
 import io.zeebe.gateway.protocol.GatewayGrpc.GatewayStub;
-import io.zeebe.util.CloseableSilently;
+import java.io.Closeable;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
@@ -59,13 +58,12 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class ZeebeClientImpl implements ZeebeClient {
-
   private final ZeebeClientConfiguration config;
   private final ZeebeObjectMapper objectMapper;
   private final GatewayStub asyncStub;
   private final ManagedChannel channel;
   private final ScheduledExecutorService executorService;
-  private final List<CloseableSilently> closeables = new CopyOnWriteArrayList<>();
+  private final List<Closeable> closeables = new CopyOnWriteArrayList<>();
   private final JobClient jobClient;
 
   public ZeebeClientImpl(final ZeebeClientConfiguration configuration) {
@@ -73,17 +71,25 @@ public class ZeebeClientImpl implements ZeebeClient {
   }
 
   public ZeebeClientImpl(final ZeebeClientConfiguration configuration, ManagedChannel channel) {
-    this(configuration, channel, buildExecutorService(configuration));
+    this(configuration, channel, buildGatewayStub(channel));
+  }
+
+  public ZeebeClientImpl(
+      final ZeebeClientConfiguration configuration,
+      ManagedChannel channel,
+      GatewayStub gatewayStub) {
+    this(configuration, channel, gatewayStub, buildExecutorService(configuration));
   }
 
   public ZeebeClientImpl(
       ZeebeClientConfiguration config,
       ManagedChannel channel,
+      GatewayStub gatewayStub,
       ScheduledExecutorService executorService) {
     this.config = config;
     this.objectMapper = new ZeebeObjectMapper();
     this.channel = channel;
-    this.asyncStub = GatewayGrpc.newStub(channel);
+    this.asyncStub = gatewayStub;
     this.executorService = executorService;
     this.jobClient = newJobClient();
   }
@@ -94,13 +100,17 @@ public class ZeebeClientImpl implements ZeebeClient {
     try {
       address = new URI("zb://" + config.getBrokerContactPoint());
     } catch (final URISyntaxException e) {
-      throw new RuntimeException("failed to parse broker contact point", e);
+      throw new RuntimeException("Failed to parse broker contact point", e);
     }
 
     // TODO: Issue #1134 - https://github.com/zeebe-io/zeebe/issues/1134
     return ManagedChannelBuilder.forAddress(address.getHost(), address.getPort())
         .usePlaintext()
         .build();
+  }
+
+  public static GatewayStub buildGatewayStub(ManagedChannel channel) {
+    return GatewayGrpc.newStub(channel);
   }
 
   private static ScheduledExecutorService buildExecutorService(
@@ -111,7 +121,7 @@ public class ZeebeClientImpl implements ZeebeClient {
 
   @Override
   public TopologyRequestStep1 newTopologyRequest() {
-    return new TopologyRequestImpl(asyncStub);
+    return new TopologyRequestImpl(asyncStub, config.getDefaultRequestTimeout());
   }
 
   @Override
@@ -121,50 +131,62 @@ public class ZeebeClientImpl implements ZeebeClient {
 
   @Override
   public void close() {
-    closeables.forEach(CloseableSilently::close);
+    closeables.forEach(
+        c -> {
+          try {
+            c.close();
+          } catch (IOException e) {
+            // ignore
+          }
+        });
 
     executorService.shutdown();
 
     try {
       if (!executorService.awaitTermination(15, TimeUnit.SECONDS)) {
-        throw new ClientException("Failed to await termination of job worker executor");
+        throw new ClientException(
+            "Timed out awaiting termination of job worker executor after 15 seconds");
       }
     } catch (InterruptedException e) {
-      throw new ClientException("Failed to await termination of job worker exectuor", e);
+      throw new ClientException(
+          "Unexpected interrupted awaiting termination of job worker executor", e);
     }
 
     channel.shutdown();
 
     try {
       if (!channel.awaitTermination(15, TimeUnit.SECONDS)) {
-        throw new ClientException("Failed to await termination of in-flight requests");
+        throw new ClientException(
+            "Timed out awaiting termination of in-flight request channel after 15 seconds");
       }
     } catch (InterruptedException e) {
-      throw new ClientException("Failed to await termination of in-flight requests", e);
+      throw new ClientException(
+          "Unexpectedly interrupted awaiting termination of in-flight request channel", e);
     }
   }
 
   @Override
   public DeployWorkflowCommandStep1 newDeployCommand() {
-    return new DeployWorkflowCommandImpl(asyncStub);
+    return new DeployWorkflowCommandImpl(asyncStub, config.getDefaultRequestTimeout());
   }
 
   @Override
   public CreateWorkflowInstanceCommandStep1 newCreateInstanceCommand() {
-    return new CreateWorkflowInstanceCommandImpl(asyncStub, objectMapper);
+    return new CreateWorkflowInstanceCommandImpl(
+        asyncStub, objectMapper, config.getDefaultRequestTimeout());
   }
 
   @Override
   public CancelWorkflowInstanceCommandStep1 newCancelInstanceCommand(
       final long workflowInstanceKey) {
-    return new CancelWorkflowInstanceCommandImpl(asyncStub, workflowInstanceKey);
+    return new CancelWorkflowInstanceCommandImpl(
+        asyncStub, workflowInstanceKey, config.getDefaultRequestTimeout());
   }
 
   @Override
-  public UpdatePayloadWorkflowInstanceCommandStep1 newUpdatePayloadCommand(
-      final long elementInstanceKey) {
-    return new UpdateWorkflowInstancePayloadCommandImpl(
-        asyncStub, objectMapper, elementInstanceKey);
+  public SetVariablesCommandStep1 newSetVariablesCommand(final long elementInstanceKey) {
+    return new SetVariablesCommandImpl(
+        asyncStub, objectMapper, elementInstanceKey, config.getDefaultRequestTimeout());
   }
 
   @Override
@@ -173,23 +195,14 @@ public class ZeebeClientImpl implements ZeebeClient {
   }
 
   @Override
-  public WorkflowResourceRequestStep1 newResourceRequest() {
-    return new GetWorkflowCommandImpl(asyncStub);
-  }
-
-  @Override
-  public WorkflowRequestStep1 newWorkflowRequest() {
-    return new ListWorkflowsCommandImpl(asyncStub);
-  }
-
-  @Override
   public ResolveIncidentCommandStep1 newResolveIncidentCommand(long incidentKey) {
-    return new ResolveIncidentCommandImpl(asyncStub, incidentKey);
+    return new ResolveIncidentCommandImpl(
+        asyncStub, incidentKey, config.getDefaultRequestTimeout());
   }
 
   @Override
   public UpdateRetriesJobCommandStep1 newUpdateRetriesCommand(long jobKey) {
-    return new JobUpdateRetriesCommandImpl(asyncStub, jobKey);
+    return new JobUpdateRetriesCommandImpl(asyncStub, jobKey, config.getDefaultRequestTimeout());
   }
 
   @Override
@@ -199,7 +212,7 @@ public class ZeebeClientImpl implements ZeebeClient {
   }
 
   private JobClient newJobClient() {
-    return new JobClientImpl(asyncStub, config, objectMapper, executorService, closeables);
+    return new JobClientImpl(asyncStub, config, objectMapper);
   }
 
   @Override
@@ -213,7 +226,7 @@ public class ZeebeClientImpl implements ZeebeClient {
   }
 
   @Override
-  public FailJobCommandStep1 newFailCommand(long jobKey) { // TODO Auto-generated method stub
+  public FailJobCommandStep1 newFailCommand(long jobKey) {
     return jobClient.newFailCommand(jobKey);
   }
 }

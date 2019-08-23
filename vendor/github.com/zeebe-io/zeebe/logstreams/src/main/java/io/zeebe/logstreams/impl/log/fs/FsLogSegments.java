@@ -1,30 +1,22 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.logstreams.impl.log.fs;
 
 public class FsLogSegments {
-  protected int initalSegmentId = -1;
+  protected int initialSegmentId = -1;
 
   protected FsLogSegment[] segments = new FsLogSegment[0];
 
   protected volatile int segmentCount = 0;
 
-  public void init(int initalSegmentId, FsLogSegment[] initialSegments) {
+  public void init(int initialSegmentId, FsLogSegment[] initialSegments) {
     this.segments = initialSegments;
-    this.initalSegmentId = initalSegmentId;
+    this.initialSegmentId = initialSegmentId;
     this.segmentCount = initialSegments.length; // volatile store
   }
 
@@ -39,12 +31,23 @@ public class FsLogSegments {
     this.segmentCount = newSegments.length; // volatile store
   }
 
+  public void removeSegmentsUntil(int segmentId) {
+    final int segmentIdx = segmentId - initialSegmentId;
+    final int newLength = segments.length - segmentIdx;
+    final FsLogSegment[] newSegments = new FsLogSegment[newLength];
+
+    System.arraycopy(segments, segmentIdx, newSegments, 0, newLength);
+    this.segments = newSegments;
+    initialSegmentId += segmentIdx;
+    this.segmentCount = newSegments.length; // volatile store
+  }
+
   public FsLogSegment getSegment(int segmentId) {
     final int segmentCount = this.segmentCount; // volatile load
 
     final FsLogSegment[] segments = this.segments;
 
-    final int segmentIdx = segmentId - initalSegmentId;
+    final int segmentIdx = segmentId - initialSegmentId;
 
     if (0 <= segmentIdx && segmentIdx < segmentCount) {
       return segments[segmentIdx];
@@ -69,6 +72,10 @@ public class FsLogSegments {
 
     this.segments = new FsLogSegment[0];
     this.segmentCount = 0;
+  }
+
+  public int getLastSegmentId() {
+    return initialSegmentId + (segmentCount - 1);
   }
 
   public int getSegmentCount() {

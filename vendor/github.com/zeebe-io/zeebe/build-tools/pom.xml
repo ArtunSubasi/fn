@@ -2,13 +2,13 @@
 
   <modelVersion>4.0.0</modelVersion>
   <name>Zeebe Build Tools</name>
-  <artifactId>zb-build-tools</artifactId>
+  <artifactId>zeebe-build-tools</artifactId>
   <packaging>jar</packaging>
 
   <parent>
     <groupId>io.zeebe</groupId>
-    <artifactId>zb-bom</artifactId>
-    <version>0.15.0-SNAPSHOT</version>
+    <artifactId>zeebe-bom</artifactId>
+    <version>0.20.0</version>
     <relativePath>../bom</relativePath>
   </parent>
 
@@ -22,7 +22,7 @@
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
-      <version>1.7.25</version>
+      <version>1.7.26</version>
     </dependency>
   </dependencies>
 

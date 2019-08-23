@@ -1,28 +1,22 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.test;
 
-import io.zeebe.client.api.events.WorkflowInstanceEvent;
-import io.zeebe.exporter.record.Record;
-import io.zeebe.exporter.record.value.WorkflowInstanceRecordValue;
-import io.zeebe.protocol.intent.Intent;
-import io.zeebe.protocol.intent.WorkflowInstanceIntent;
+import io.zeebe.client.api.response.WorkflowInstanceEvent;
+import io.zeebe.client.impl.ZeebeObjectMapper;
+import io.zeebe.protocol.record.Record;
+import io.zeebe.protocol.record.intent.WorkflowInstanceIntent;
+import io.zeebe.protocol.record.value.WorkflowInstanceRecordValue;
 import io.zeebe.test.util.record.RecordingExporter;
 import io.zeebe.test.util.record.WorkflowInstanceRecordStream;
+import io.zeebe.test.util.record.WorkflowInstances;
 import io.zeebe.test.util.stream.StreamWrapperException;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -34,14 +28,11 @@ import org.assertj.core.api.AbstractAssert;
 
 public class WorkflowInstanceAssert
     extends AbstractAssert<WorkflowInstanceAssert, WorkflowInstanceEvent> {
+  private static final ZeebeObjectMapper OBJECT_MAPPER = new ZeebeObjectMapper();
 
   private static final List<WorkflowInstanceIntent> ELEMENT_PASSED_INTENTS =
       Arrays.asList(
-          WorkflowInstanceIntent.ELEMENT_COMPLETED,
-          WorkflowInstanceIntent.EVENT_TRIGGERED,
-          WorkflowInstanceIntent.EVENT_ACTIVATED,
-          WorkflowInstanceIntent.GATEWAY_ACTIVATED,
-          WorkflowInstanceIntent.SEQUENCE_FLOW_TAKEN);
+          WorkflowInstanceIntent.ELEMENT_COMPLETED, WorkflowInstanceIntent.SEQUENCE_FLOW_TAKEN);
 
   private static final List<WorkflowInstanceIntent> INSTANCE_ENDED_INTENTS =
       Arrays.asList(
@@ -65,7 +56,7 @@ public class WorkflowInstanceAssert
         exists(
             RecordingExporter.workflowInstanceRecords()
                 .withWorkflowInstanceKey(workflowInstanceKey)
-                .withKey(workflowInstanceKey)
+                .withRecordKey(workflowInstanceKey)
                 .filter(intent(INSTANCE_ENDED_INTENTS)));
 
     if (!isEnded) {
@@ -142,60 +133,46 @@ public class WorkflowInstanceAssert
     return this;
   }
 
-  public WorkflowInstanceAssert hasElementPayload(
-      String elementId, String key, Object expectedValue) {
-
+  public WorkflowInstanceAssert hasVariable(String key, Object expectedValue) {
     final Optional<Record<WorkflowInstanceRecordValue>> record =
         RecordingExporter.workflowInstanceRecords()
             .withWorkflowInstanceKey(workflowInstanceKey)
-            .withElementId(elementId)
-            .filter(r -> ELEMENT_PASSED_INTENTS.contains(r.getMetadata().getIntent()))
-            .findFirst();
-
-    if (record.isPresent()) {
-      hasPayload(record.get(), key, expectedValue);
-
-    } else {
-      failWithMessage("Expected <%s> to contain payload but element was not passed", elementId);
-    }
-
-    return this;
-  }
-
-  public WorkflowInstanceAssert hasPayload(String key, Object expectedValue) {
-
-    final Optional<Record<WorkflowInstanceRecordValue>> record =
-        RecordingExporter.workflowInstanceRecords()
-            .withWorkflowInstanceKey(workflowInstanceKey)
-            .withKey(workflowInstanceKey)
+            .withRecordKey(workflowInstanceKey)
             .filter(intent(INSTANCE_ENDED_INTENTS))
             .findFirst();
 
     if (record.isPresent()) {
-      hasPayload(record.get(), key, expectedValue);
-
+      hasVariable(record.get(), key, expectedValue);
     } else {
-      failWithMessage("Expected workflow instance to contain payload but instance is not ended");
+      failWithMessage("Expected workflow instance to contain variables but instance is not ended");
     }
 
     return this;
   }
 
-  private WorkflowInstanceAssert hasPayload(
+  private WorkflowInstanceAssert hasVariable(
       final Record<WorkflowInstanceRecordValue> record, String key, Object expectedValue) {
-    final Map<String, Object> payload = record.getValue().getPayloadAsMap();
+    final Map<String, String> variables =
+        WorkflowInstances.getCurrentVariables(workflowInstanceKey, record.getPosition());
 
-    if (payload.containsKey(key)) {
-      final Object value = payload.get(key);
-
-      if (!expectedValue.equals(value)) {
-        failWithMessage(
-            "Expected payload value of <%s> to be <%s> but was <%s>", key, expectedValue, value);
-      }
-
-    } else {
+    if (!variables.containsKey(key)) {
       failWithMessage(
-          "Expected payload <%s> to contain <%s> but could not find entry", payload, key);
+          "Expected variables <%s> to contain <%s> but could not find entry", variables, key);
+      return this;
+    }
+
+    final Object value;
+    try {
+      value = OBJECT_MAPPER.readValue(variables.get(key), Object.class);
+    } catch (IOException e) {
+      failWithMessage("Expected variable values to be JSON, but got <%s>", e.getMessage());
+      return this;
+    }
+
+    if ((expectedValue == null && value != null)
+        || (expectedValue != null && !expectedValue.equals(value))) {
+      failWithMessage(
+          "Expected variables value of <%s> to be <%s> but was <%s>", key, expectedValue, value);
     }
 
     return this;
@@ -211,11 +188,7 @@ public class WorkflowInstanceAssert
 
   private static Predicate<Record<WorkflowInstanceRecordValue>> intent(
       List<WorkflowInstanceIntent> intents) {
-    return record -> {
-      final Intent intent = record.getMetadata().getIntent();
-
-      return intents.contains(intent);
-    };
+    return record -> intents.contains(record.getIntent());
   }
 
   private static Predicate<Record<WorkflowInstanceRecordValue>> elementId(List<String> elementIds) {

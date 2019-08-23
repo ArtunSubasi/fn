@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.gateway.impl.configuration;
 
@@ -24,6 +16,7 @@ public class GatewayCfg {
   private NetworkCfg network = new NetworkCfg();
   private ClusterCfg cluster = new ClusterCfg();
   private ThreadsCfg threads = new ThreadsCfg();
+  private MonitoringCfg monitoring = new MonitoringCfg();
 
   public void init() {
     init(new Environment());
@@ -37,6 +30,7 @@ public class GatewayCfg {
     network.init(environment, defaultHost);
     cluster.init(environment);
     threads.init(environment);
+    monitoring.init(environment, defaultHost);
   }
 
   public NetworkCfg getNetwork() {
@@ -66,6 +60,15 @@ public class GatewayCfg {
     return this;
   }
 
+  public MonitoringCfg getMonitoring() {
+    return monitoring;
+  }
+
+  public GatewayCfg setMonitoring(MonitoringCfg monitoring) {
+    this.monitoring = monitoring;
+    return this;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -77,12 +80,13 @@ public class GatewayCfg {
     final GatewayCfg that = (GatewayCfg) o;
     return Objects.equals(network, that.network)
         && Objects.equals(cluster, that.cluster)
-        && Objects.equals(threads, that.threads);
+        && Objects.equals(threads, that.threads)
+        && Objects.equals(monitoring, that.monitoring);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(network, cluster, threads);
+    return Objects.hash(network, cluster, threads, monitoring);
   }
 
   @Override
@@ -94,6 +98,8 @@ public class GatewayCfg {
         + cluster
         + ", threadsCfg="
         + threads
+        + ", monitoringCfg="
+        + monitoring
         + '}';
   }
 

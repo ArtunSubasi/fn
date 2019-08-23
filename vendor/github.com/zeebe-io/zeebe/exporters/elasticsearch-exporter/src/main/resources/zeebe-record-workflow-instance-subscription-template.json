@@ -21,8 +21,8 @@
             "messageName": {
               "type": "keyword"
             },
-            "payload": {
-              "type": "text"
+            "variables": {
+              "enabled": false
             }
           }
         }

@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.transport.impl.util;
 
@@ -26,6 +18,9 @@ public class SocketUtil {
 
   public static final Logger LOG = new ZbLogger("io.zeebe.transport.impl.util.SocketUtil");
 
+  public static final String TEST_FORK_NUMBER_PROPERTY_NAME = "testForkNumber";
+  public static final String TEST_MAVEN_ID_PROPERTY_NAME = "testMavenId";
+
   public static final String DEFAULT_HOST = "localhost";
   public static final int BASE_PORT = 25600;
   public static final int RANGE_SIZE = 100;
@@ -34,20 +29,60 @@ public class SocketUtil {
   private static final PortRange PORT_RANGE;
 
   static {
-    int testForkNumber = 0;
-    try {
-      final String testForkNumberProperty = System.getProperty("testForkNumber");
-      if (testForkNumberProperty != null) {
-        testForkNumber = Integer.valueOf(testForkNumberProperty);
-      }
-    } catch (Exception e) {
-      LOG.warn("Failed to read test fork number system property");
-    }
+    final int testForkNumber = getTestForkNumber();
+    final int testMavenId = getTestMavenId();
 
-    final int min = BASE_PORT + testForkNumber * RANGE_SIZE;
+    LOG.info(
+        "Starting socket assignment with testForkNumber {} and testMavenId {}",
+        testForkNumber,
+        testMavenId);
+
+    // ensure limits to stay in available port range
+    assert testForkNumber < 39 : "System property test fork number has to be smaller then 39";
+    assert testMavenId < 10 : "System property test maven id has to be smaller then 10";
+
+    final int testOffset = testForkNumber * 10 + testMavenId;
+
+    final int min = BASE_PORT + testOffset * RANGE_SIZE;
     final int max = min + RANGE_SIZE;
     TEST_FORK_NUMBER = testForkNumber;
     PORT_RANGE = new PortRange(DEFAULT_HOST, min, max);
+  }
+
+  private static int getTestForkNumber() {
+    int testForkNumber = 0;
+    try {
+      final String testForkNumberProperty = System.getProperty(TEST_FORK_NUMBER_PROPERTY_NAME);
+      if (testForkNumberProperty != null) {
+        testForkNumber = Integer.valueOf(testForkNumberProperty);
+      } else {
+        LOG.warn(
+            "No system property '{}' set, using default value {}",
+            TEST_FORK_NUMBER_PROPERTY_NAME,
+            testForkNumber);
+      }
+    } catch (Exception e) {
+      LOG.warn("Failed to read test fork number system property", e);
+    }
+    return testForkNumber;
+  }
+
+  private static int getTestMavenId() {
+    int testMavenId = 0;
+    try {
+      final String testMavenIdProperty = System.getProperty(TEST_MAVEN_ID_PROPERTY_NAME);
+      if (testMavenIdProperty != null) {
+        testMavenId = Integer.valueOf(testMavenIdProperty);
+      } else {
+        LOG.warn(
+            "No system property '{}' set, using default value {}",
+            TEST_MAVEN_ID_PROPERTY_NAME,
+            testMavenId);
+      }
+    } catch (Exception e) {
+      LOG.warn("Failed to read test maven id system property", e);
+    }
+    return testMavenId;
   }
 
   public static SocketAddress getNextAddress() {
@@ -74,6 +109,7 @@ public class SocketUtil {
     int currentOffset;
 
     PortRange(String host, int min, int max) {
+      assert max <= 65535 : "Port range exceeds maximal available port 65535, got max port " + max;
       this.host = host;
       this.basePort = min;
       this.maxOffset = max - min;
@@ -96,8 +132,24 @@ public class SocketUtil {
         next = basePort + (currentOffset++ % maxOffset);
       } while (!portAvailable(next));
 
-      LOG.debug("Choosing next port {} for test fork {}", next, TEST_FORK_NUMBER);
+      LOG.info(
+          "Choosing next port {} for test fork {} with range {}", next, TEST_FORK_NUMBER, this);
       return next;
+    }
+
+    @Override
+    public String toString() {
+      return "PortRange{"
+          + "host='"
+          + host
+          + '\''
+          + ", basePort="
+          + basePort
+          + ", maxOffset="
+          + maxOffset
+          + ", currentOffset="
+          + currentOffset
+          + '}';
     }
   }
 }

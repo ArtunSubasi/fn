@@ -2,72 +2,101 @@
 
   <modelVersion>4.0.0</modelVersion>
   <name>Zeebe Parent</name>
-  <artifactId>zb-parent</artifactId>
-  <version>0.15.0-SNAPSHOT</version>
+  <artifactId>zeebe-parent</artifactId>
+  <version>0.20.0</version>
   <packaging>pom</packaging>
   <inceptionYear>2017</inceptionYear>
   <url>http://zeebe.io/</url>
 
   <parent>
     <groupId>io.zeebe</groupId>
-    <artifactId>zb-bom</artifactId>
-    <version>0.15.0-SNAPSHOT</version>
+    <artifactId>zeebe-bom</artifactId>
+    <version>0.20.0</version>
     <relativePath>../bom</relativePath>
   </parent>
 
+  <licenses>
+    <license>
+      <name>Zeebe Community License v1.0</name>
+      <url>https://zeebe.io/legal/zeebe-community-license-1.0</url>
+    </license>
+  </licenses>
+
   <properties>
+    <!-- Zeebe Community License v1.0 header -->
+    <license.header>${maven.multiModuleProjectDirectory}/parent/COPYING-HEADER.txt</license.header>
+
     <project.build.sourceEncoding>utf-8</project.build.sourceEncoding>
-    <license.header>com/mycila/maven/plugin/license/templates/APACHE-2.txt</license.header>
     <!-- disable jdk8 javadoc checks on release build -->
     <additionalparam>-Xdoclint:none</additionalparam>
     <checkstyle.config.location>.checkstyle.xml</checkstyle.config.location>
+    <spotbugs.include>spotbugs/spotbugs-include.xml</spotbugs.include>
 
     <!-- EXTERNAL LIBS -->
-    <version.agrona>0.9.29</version.agrona>
-    <version.assertj>3.11.1</version.assertj>
-    <version.elasticsearch>6.5.4</version.elasticsearch>
-    <version.grpc>1.17.1</version.grpc>
+    <version.agrona>1.0.3</version.agrona>
+    <version.animal-sniffer>1.18</version.animal-sniffer>
+    <version.assertj>3.12.2</version.assertj>
+    <version.atomix>3.2.0-alpha4</version.atomix>
+    <version.camunda>7.10.0</version.camunda>
+    <version.commons-lang>3.9</version.commons-lang>
+    <version.commons-logging>1.2</version.commons-logging>
+    <version.commons-math>3.6.1</version.commons-math>
+    <version.commons-codec>1.12</version.commons-codec>
+    <version.elasticsearch>6.8.1</version.elasticsearch>
+    <version.embedded-elasticsearch>2.10.0</version.embedded-elasticsearch>
+    <version.error-prone>2.3.3</version.error-prone>
+    <version.grpc>1.22.1</version.grpc>
+    <version.gson>2.8.5</version.gson>
+    <version.guava>28.0-jre</version.guava>
     <version.hamcrest>2.1</version.hamcrest>
-    <version.jackson>2.9.8</version.jackson>
-    <version.jmh>1.21</version.jmh>
+    <version.hppc>0.8.1</version.hppc>
+    <version.httpasyncclient>4.1.4</version.httpasyncclient>
+    <version.httpclient>4.5.9</version.httpclient>
+    <version.httpcomponents>4.4.11</version.httpcomponents>
+    <version.jackson>2.9.9</version.jackson>
+    <version.java-grpc-prometheus>0.3.0</version.java-grpc-prometheus>
     <version.junit>4.12</version.junit>
-    <version.log4j>2.11.1</version.log4j>
-    <version.mockito>2.23.4</version.mockito>
+    <version.log4j>2.12.0</version.log4j>
+    <version.mockito>3.0.0</version.mockito>
     <version.model>7.7.0</version.model>
     <version.msgpack>0.8.16</version.msgpack>
-    <version.netty.tcnative>2.0.20.Final</version.netty.tcnative>
-    <version.protobuf>3.6.1</version.protobuf>
-    <version.protoc>3.6.0</version.protoc>
-    <version.rocksdbjni>5.17.2</version.rocksdbjni>
-    <version.sbe>1.10.2</version.sbe>
-    <version.scala-parser>1.0.6</version.scala-parser>
-    <version.scala>2.12.2</version.scala>
-    <version.slf4j>1.7.25</version.slf4j>
+    <version.netty>4.1.37.Final</version.netty>
+    <version.objenesis>3.0.1</version.objenesis>
+    <version.prometheus>0.6.0</version.prometheus>
+    <version.protobuf>3.9.0</version.protobuf>
+    <version.rocksdbjni>6.0.1</version.rocksdbjni>
+    <version.sbe>1.12.8</version.sbe>
+    <version.scala-parser>1.1.2</version.scala-parser>
+    <version.scala>2.13.0</version.scala>
+    <version.slf4j>1.7.26</version.slf4j>
+    <version.snakeyaml>1.24</version.snakeyaml>
     <version.streamex>0.6.8</version.streamex>
     <version.toml>0.7.2</version.toml>
 
     <!-- maven plugins -->
     <plugin.version.antrun>1.8</plugin.version.antrun>
-    <plugin.version.appassembler>2.0.0</plugin.version.appassembler>
+    <plugin.version.appassembler>2.1.0</plugin.version.appassembler>
     <plugin.version.build-helper>3.0.0</plugin.version.build-helper>
-    <plugin.version.checkstyle>3.0.0</plugin.version.checkstyle>
-    <plugin.version.compiler>3.8.0</plugin.version.compiler>
-    <plugin.version.elasticsearch>6.9</plugin.version.elasticsearch>
+    <plugin.version.checkstyle>3.1.0</plugin.version.checkstyle>
+    <plugin.version.compiler>3.8.1</plugin.version.compiler>
     <plugin.version.exec>1.6.0</plugin.version.exec>
-    <plugin.version.failsafe>2.22.1</plugin.version.failsafe>
-    <plugin.version.fmt>2.7</plugin.version.fmt>
+    <plugin.version.failsafe>3.0.0-M3</plugin.version.failsafe>
+    <plugin.version.fmt>2.9</plugin.version.fmt>
     <plugin.version.license>3.0</plugin.version.license>
     <plugin.version.protobuf-maven-plugin>0.6.1</plugin.version.protobuf-maven-plugin>
+    <plugin.version.proto-backwards-compatibility>1.0.3</plugin.version.proto-backwards-compatibility>
     <plugin.version.replacer>1.5.3</plugin.version.replacer>
     <plugin.version.resources>3.1.0</plugin.version.resources>
-    <plugin.version.scala>3.2.1</plugin.version.scala>
+    <plugin.version.scala>4.1.0</plugin.version.scala>
     <plugin.version.shade>3.2.1</plugin.version.shade>
     <plugin.version.surefire>3.0.0-M3</plugin.version.surefire>
     <plugin.version.versions>2.7</plugin.version.versions>
     <plugin.version.enforcer>3.0.0-M2</plugin.version.enforcer>
+    <plugin.version.dependency>3.1.1</plugin.version.dependency>
+    <plugin.version.spotbugs>3.1.12</plugin.version.spotbugs>
 
     <!-- maven extensions -->
-    <extension.version.os-maven-plugin>1.6.1</extension.version.os-maven-plugin>
+    <extension.version.os-maven-plugin>1.6.2</extension.version.os-maven-plugin>
   </properties>
 
   <dependencyManagement>
@@ -75,6 +104,22 @@
       <dependency>
         <groupId>io.zeebe</groupId>
         <artifactId>zeebe-broker-core</artifactId>
+        <version>${project.version}</version>
+        <classifier>tests</classifier>
+        <type>test-jar</type>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zeebe-workflow-engine</artifactId>
+        <version>${project.version}</version>
+        <classifier>tests</classifier>
+        <type>test-jar</type>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>zeebe-logstreams</artifactId>
         <version>${project.version}</version>
         <classifier>tests</classifier>
         <type>test-jar</type>
@@ -125,18 +170,6 @@
       </dependency>
 
       <dependency>
-        <groupId>org.openjdk.jmh</groupId>
-        <artifactId>jmh-core</artifactId>
-        <version>${version.jmh}</version>
-      </dependency>
-
-      <dependency>
-        <groupId>org.openjdk.jmh</groupId>
-        <artifactId>jmh-generator-annprocess</artifactId>
-        <version>${version.jmh}</version>
-      </dependency>
-
-      <dependency>
         <groupId>com.moandjiezana.toml</groupId>
         <artifactId>toml4j</artifactId>
         <version>${version.toml}</version>
@@ -156,6 +189,12 @@
 
       <dependency>
         <groupId>org.apache.logging.log4j</groupId>
+        <artifactId>log4j-api</artifactId>
+        <version>${version.log4j}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.apache.logging.log4j</groupId>
         <artifactId>log4j-slf4j-impl</artifactId>
         <version>${version.log4j}</version>
       </dependency>
@@ -168,14 +207,32 @@
 
       <dependency>
         <groupId>org.hamcrest</groupId>
-        <artifactId>hamcrest-library</artifactId>
+        <artifactId>hamcrest</artifactId>
         <version>${version.hamcrest}</version>
       </dependency>
 
       <dependency>
+        <groupId>org.hamcrest</groupId>
+        <artifactId>hamcrest-core</artifactId>
+        <version>${version.hamcrest}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.scala-lang</groupId>
+        <artifactId>scala-library</artifactId>
+        <version>${version.scala}</version>
+      </dependency>
+
+      <dependency>
         <groupId>org.scala-lang.modules</groupId>
-        <artifactId>scala-parser-combinators_2.12</artifactId>
+        <artifactId>scala-parser-combinators_2.13</artifactId>
         <version>${version.scala-parser}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.camunda.bpm.model</groupId>
+        <artifactId>camunda-xml-model</artifactId>
+        <version>${version.camunda}</version>
       </dependency>
 
       <dependency>
@@ -185,8 +242,62 @@
       </dependency>
 
       <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>atomix</artifactId>
+        <version>${version.atomix}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>atomix-cluster</artifactId>
+        <version>${version.atomix}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>atomix-primary-backup</artifactId>
+        <version>${version.atomix}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>atomix-primitive</artifactId>
+        <version>${version.atomix}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>atomix-utils</artifactId>
+        <version>${version.atomix}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.zeebe</groupId>
+        <artifactId>atomix-raft</artifactId>
+        <version>${version.atomix}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.grpc</groupId>
+        <artifactId>grpc-core</artifactId>
+        <version>${version.grpc}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.grpc</groupId>
+        <artifactId>grpc-api</artifactId>
+        <version>${version.grpc}</version>
+      </dependency>
+
+      <dependency>
         <groupId>io.grpc</groupId>
         <artifactId>grpc-protobuf</artifactId>
+        <version>${version.grpc}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.grpc</groupId>
+        <artifactId>grpc-protobuf-lite</artifactId>
         <version>${version.grpc}</version>
       </dependency>
 
@@ -198,14 +309,14 @@
 
       <dependency>
         <groupId>com.google.protobuf</groupId>
-        <artifactId>protobuf-java-util</artifactId>
+        <artifactId>protobuf-java</artifactId>
         <version>${version.protobuf}</version>
       </dependency>
 
       <dependency>
-        <groupId>io.netty</groupId>
-        <artifactId>netty-tcnative-boringssl-static</artifactId>
-        <version>${version.netty.tcnative}</version>
+        <groupId>com.google.protobuf</groupId>
+        <artifactId>protobuf-java-util</artifactId>
+        <version>${version.protobuf}</version>
       </dependency>
 
       <dependency>
@@ -227,15 +338,193 @@
       </dependency>
 
       <dependency>
+        <groupId>org.elasticsearch</groupId>
+        <artifactId>elasticsearch</artifactId>
+        <version>${version.elasticsearch}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.elasticsearch</groupId>
+        <artifactId>elasticsearch-x-content</artifactId>
+        <version>${version.elasticsearch}</version>
+      </dependency>
+
+      <dependency>
         <groupId>org.elasticsearch.client</groupId>
         <artifactId>elasticsearch-rest-high-level-client</artifactId>
         <version>${version.elasticsearch}</version>
       </dependency>
 
+      <dependency>
+        <groupId>org.elasticsearch.client</groupId>
+        <artifactId>elasticsearch-rest-client</artifactId>
+        <version>${version.elasticsearch}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>com.google.guava</groupId>
+        <artifactId>guava</artifactId>
+        <version>${version.guava}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>com.google.code.gson</groupId>
+        <artifactId>gson</artifactId>
+        <version>${version.gson}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>animal-sniffer-annotations</artifactId>
+        <version>${version.animal-sniffer}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>com.google.errorprone</groupId>
+        <artifactId>error_prone_annotations</artifactId>
+        <version>${version.error-prone}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.objenesis</groupId>
+        <artifactId>objenesis</artifactId>
+        <version>${version.objenesis}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.yaml</groupId>
+        <artifactId>snakeyaml</artifactId>
+        <version>${version.snakeyaml}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-lang3</artifactId>
+        <version>${version.commons-lang}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-math3</artifactId>
+        <version>${version.commons-math}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>commons-logging</groupId>
+        <artifactId>commons-logging</artifactId>
+        <version>${version.commons-logging}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.apache.httpcomponents</groupId>
+        <artifactId>httpcore</artifactId>
+        <version>${version.httpcomponents}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.apache.httpcomponents</groupId>
+        <artifactId>httpcore-nio</artifactId>
+        <version>${version.httpcomponents}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.apache.httpcomponents</groupId>
+        <artifactId>httpasyncclient</artifactId>
+        <version>${version.httpasyncclient}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.apache.httpcomponents</groupId>
+        <artifactId>httpclient</artifactId>
+        <version>${version.httpclient}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>commons-codec</groupId>
+        <artifactId>commons-codec</artifactId>
+        <version>${version.commons-codec}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>com.carrotsearch</groupId>
+        <artifactId>hppc</artifactId>
+        <version>${version.hppc}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>pl.allegro.tech</groupId>
+        <artifactId>embedded-elasticsearch</artifactId>
+        <version>${version.embedded-elasticsearch}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.prometheus</groupId>
+        <artifactId>simpleclient</artifactId>
+        <version>${version.prometheus}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.prometheus</groupId>
+        <artifactId>simpleclient_common</artifactId>
+        <version>${version.prometheus}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.prometheus</groupId>
+        <artifactId>simpleclient_hotspot</artifactId>
+        <version>${version.prometheus}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.prometheus</groupId>
+        <artifactId>simpleclient_httpserver</artifactId>
+        <version>${version.prometheus}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>me.dinowernli</groupId>
+        <artifactId>java-grpc-prometheus</artifactId>
+        <version>${version.java-grpc-prometheus}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-all</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+
     </dependencies>
   </dependencyManagement>
 
+  <dependencies>
+    <dependency>
+      <groupId>io.zeebe</groupId>
+      <artifactId>zeebe-build-tools</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-slf4j-impl</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
   <build>
+    <extensions>
+      <extension>
+        <groupId>kr.motd.maven</groupId>
+        <artifactId>os-maven-plugin</artifactId>
+        <version>${extension.version.os-maven-plugin}</version>
+      </extension>
+    </extensions>
+
     <pluginManagement>
       <plugins>
         <!-- MAVEN COMPILER -->
@@ -288,7 +577,7 @@
           <dependencies>
             <dependency>
               <groupId>io.zeebe</groupId>
-              <artifactId>zb-build-tools</artifactId>
+              <artifactId>zeebe-build-tools</artifactId>
               <version>${project.version}</version>
             </dependency>
           </dependencies>
@@ -300,7 +589,6 @@
             <sourceDirectories>
               <sourceDirectory>${project.build.sourceDirectory}</sourceDirectory>
               <sourceDirectory>${project.build.testSourceDirectory}</sourceDirectory>
-              <sourceDirectory>${project.basedir}/src/test/jmh</sourceDirectory>
             </sourceDirectories>
           </configuration>
           <executions>
@@ -491,11 +779,6 @@
               </goals>
             </execution>
           </executions>
-          <configuration>
-            <additionalSourceDirectories>
-              <additionalSourceDirectory>${project.basedir}/src/test/jmh</additionalSourceDirectory>
-            </additionalSourceDirectories>
-          </configuration>
         </plugin>
 
         <plugin>
@@ -504,7 +787,7 @@
           <version>${plugin.version.protobuf-maven-plugin}</version>
           <configuration>
             <protocArtifact>
-              com.google.protobuf:protoc:${version.protoc}:exe:${os.detected.classifier}
+              com.google.protobuf:protoc:${version.protobuf}:exe:${os.detected.classifier}
             </protocArtifact>
             <pluginId>grpc-java</pluginId>
             <pluginArtifact>
@@ -522,42 +805,32 @@
         </plugin>
 
         <plugin>
-          <groupId>com.google.code.maven-replacer-plugin</groupId>
-          <artifactId>replacer</artifactId>
-          <version>${plugin.version.replacer}</version>
-        </plugin>
-
-        <plugin>
-          <groupId>com.github.alexcojocaru</groupId>
-          <artifactId>elasticsearch-maven-plugin</artifactId>
-          <version>${plugin.version.elasticsearch}</version>
+          <groupId>com.salesforce.servicelibs</groupId>
+          <artifactId>proto-backwards-compatibility</artifactId>
+          <version>${plugin.version.proto-backwards-compatibility}</version>
           <configuration>
-            <version>${version.elasticsearch}</version>
-            <skip>${skipTests}</skip>
+            <protoSourceRoot>${project.basedir}/src/main/proto</protoSourceRoot>
           </configuration>
           <executions>
             <execution>
-              <id>start-elasticsearch</id>
-              <phase>pre-integration-test</phase>
               <goals>
-                <goal>runforked</goal>
-              </goals>
-            </execution>
-            <execution>
-              <id>stop-elasticsearch</id>
-              <phase>post-integration-test</phase>
-              <goals>
-                <goal>stop</goal>
+                <goal>backwards-compatibility-check</goal>
               </goals>
             </execution>
           </executions>
         </plugin>
 
         <plugin>
+          <groupId>com.google.code.maven-replacer-plugin</groupId>
+          <artifactId>replacer</artifactId>
+          <version>${plugin.version.replacer}</version>
+        </plugin>
+
+        <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-enforcer-plugin</artifactId>
           <version>${plugin.version.enforcer}</version>
-         <executions>
+          <executions>
             <execution>
               <id>enforce-jdk-8</id>
               <goals>
@@ -574,7 +847,52 @@
                 </rules>
               </configuration>
             </execution>
+            <execution>
+              <id>enforce-dependency-convergence</id>
+              <goals>
+                <goal>enforce</goal>
+              </goals>
+              <configuration>
+                <rules>
+                  <dependencyConvergence />
+                </rules>
+              </configuration>
+            </execution>
           </executions>
+        </plugin>
+
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <version>${plugin.version.dependency}</version>
+          <executions>
+            <execution>
+              <id>analyze-dependencies</id>
+              <goals>
+                <goal>analyze-only</goal>
+              </goals>
+              <configuration>
+                <failOnWarning>true</failOnWarning>
+                <outputXML>true</outputXML>
+                <!-- dependencies not directly used in all projects during tests -->
+                <ignoredUnusedDeclaredDependencies>
+                  <dep>org.apache.logging.log4j:log4j-slf4j-impl</dep>
+                  <dep>org.apache.logging.log4j:log4j-core</dep>
+                  <dep>io.zeebe:zeebe-build-tools</dep>
+                  <dep>io.zeebe:zeebe-gateway-protocol</dep>
+                </ignoredUnusedDeclaredDependencies>
+              </configuration>
+            </execution>
+          </executions>
+        </plugin>
+
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-jar-plugin</artifactId>
+          <version>3.1.2</version>
+          <configuration>
+            <useDefaultManifestFile>false</useDefaultManifestFile>
+          </configuration>
         </plugin>
 
       </plugins>
@@ -612,36 +930,12 @@
         <artifactId>maven-enforcer-plugin</artifactId>
       </plugin>
 
-      <!-- add jmh test sources to build -->
       <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>build-helper-maven-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>add-jmh-tests</id>
-            <phase>generate-test-sources</phase>
-            <goals>
-              <goal>add-test-source</goal>
-            </goals>
-            <configuration>
-              <sources>
-                <source>src/test/jmh</source>
-              </sources>
-            </configuration>
-          </execution>
-        </executions>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
       </plugin>
-
     </plugins>
   </build>
-
-  <dependencies>
-    <dependency>
-      <groupId>io.zeebe</groupId>
-      <artifactId>zb-build-tools</artifactId>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
 
   <profiles>
     <profile>
@@ -658,6 +952,7 @@
         </plugins>
       </build>
     </profile>
+
     <profile>
       <id>skip-unstable-ci</id>
       <build>
@@ -672,20 +967,7 @@
         </plugins>
       </build>
     </profile>
-    <profile>
-      <id>retry-tests</id>
-      <build>
-        <plugins>
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-surefire-plugin</artifactId>
-            <configuration>
-              <rerunFailingTestsCount>3</rerunFailingTestsCount>
-            </configuration>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
+
     <profile>
       <id>parallel-tests</id>
       <build>
@@ -703,6 +985,88 @@
                 <testForkNumber>$${surefire.forkNumber}</testForkNumber>
               </systemPropertyVariables>
             </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <profile>
+      <id>spotbugs</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs-maven-plugin</artifactId>
+            <version>${plugin.version.spotbugs}</version>
+            <configuration>
+              <effort>Max</effort>
+              <threshold>Low</threshold>
+              <xmlOutput>true</xmlOutput>
+              <includeFilterFile>${spotbugs.include}</includeFilterFile>
+            </configuration>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>check</goal>
+                </goals>
+              </execution>
+            </executions>
+
+            <!-- dependency on build tool to reference the spotbugs filter-->
+            <dependencies>
+              <dependency>
+                <groupId>io.zeebe</groupId>
+                <artifactId>zeebe-build-tools</artifactId>
+                <version>${project.version}</version>
+              </dependency>
+            </dependencies>
+          </plugin>
+        </plugins>
+
+      </build>
+    </profile>
+
+    <!--
+      This profile is used to add an explicit dependency to surefire-junit. To fix the race condition
+      of https://github.com/zeebe-io/zeebe/issues/2379 we download all dependencies at the beginning
+      with mvn dependency:go-offline and then run the tests in offline mode. But the plugin misses
+      to download the surefire-junit dependency, therefore define an explicit dependency while downloading
+    -->
+    <profile>
+      <id>prepare-offline</id>
+      <dependencies>
+        <dependency>
+          <groupId>org.apache.maven.surefire</groupId>
+          <artifactId>surefire-junit4</artifactId>
+          <version>${plugin.version.surefire}</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>org.apache.maven.surefire</groupId>
+          <artifactId>surefire-junit47</artifactId>
+          <version>${plugin.version.surefire}</version>
+          <scope>test</scope>
+        </dependency>
+      </dependencies>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-dependency-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>analyze-dependencies</id>
+                <goals>
+                  <goal>analyze-only</goal>
+                </goals>
+                <configuration>
+                  <ignoredUnusedDeclaredDependencies combine.children="append">
+                    <dep>org.apache.maven.surefire:surefire-junit4</dep>
+                    <dep>org.apache.maven.surefire:surefire-junit47</dep>
+                  </ignoredUnusedDeclaredDependencies>
+                </configuration>
+              </execution>
+            </executions>
           </plugin>
         </plugins>
       </build>

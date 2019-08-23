@@ -1,29 +1,21 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.gateway.impl.broker.request;
 
 import io.zeebe.gateway.Loggers;
+import io.zeebe.gateway.cmd.UnsupportedBrokerResponseException;
 import io.zeebe.gateway.impl.broker.response.BrokerError;
 import io.zeebe.gateway.impl.broker.response.BrokerErrorResponse;
 import io.zeebe.gateway.impl.broker.response.BrokerResponse;
-import io.zeebe.protocol.clientapi.ErrorCode;
-import io.zeebe.protocol.clientapi.ErrorResponseDecoder;
-import io.zeebe.protocol.clientapi.ErrorResponseEncoder;
-import io.zeebe.protocol.clientapi.MessageHeaderDecoder;
 import io.zeebe.protocol.impl.encoding.ErrorResponse;
+import io.zeebe.protocol.record.ErrorResponseDecoder;
+import io.zeebe.protocol.record.ErrorResponseEncoder;
+import io.zeebe.protocol.record.MessageHeaderDecoder;
 import io.zeebe.transport.ClientResponse;
 import io.zeebe.util.buffer.BufferUtil;
 import io.zeebe.util.buffer.BufferWriter;
@@ -84,7 +76,8 @@ public abstract class BrokerRequest<T> implements BufferWriter {
         final BrokerError error = new BrokerError(errorResponse);
         return new BrokerErrorResponse<>(error);
       } else {
-        return new BrokerErrorResponse<>(unknownMessageError(responseBuffer));
+        throw new UnsupportedBrokerResponseException(
+            headerDecoder.schemaId(), headerDecoder.templateId(), schemaId, templateId);
       }
     } catch (Exception e) {
       // Log response buffer for debugging purpose
@@ -116,14 +109,5 @@ public abstract class BrokerRequest<T> implements BufferWriter {
     wrapResponseHeader(buffer);
 
     return headerDecoder.schemaId() == schemaId && headerDecoder.templateId() == templateId;
-  }
-
-  protected BrokerError unknownMessageError(DirectBuffer buffer) {
-    wrapResponseHeader(buffer);
-    return new BrokerError(
-        ErrorCode.SBE_UNKNOWN,
-        String.format(
-            "Received unknown message with schema id '%d' and template id '%d'. Expected schema id '%d' and template id '%d'",
-            headerDecoder.schemaId(), headerDecoder.templateId(), schemaId, templateId));
   }
 }

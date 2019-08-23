@@ -1,22 +1,15 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.test.util.record;
 
-import io.zeebe.exporter.record.Record;
-import io.zeebe.exporter.record.value.IncidentRecordValue;
+import io.zeebe.protocol.record.Record;
+import io.zeebe.protocol.record.value.ErrorType;
+import io.zeebe.protocol.record.value.IncidentRecordValue;
 import java.util.stream.Stream;
 
 public class IncidentRecordStream
@@ -31,7 +24,7 @@ public class IncidentRecordStream
     return new IncidentRecordStream(wrappedStream);
   }
 
-  public IncidentRecordStream withErrorType(final String errorType) {
+  public IncidentRecordStream withErrorType(final ErrorType errorType) {
     return valueFilter(v -> errorType.equals(v.getErrorType()));
   }
 
@@ -41,6 +34,10 @@ public class IncidentRecordStream
 
   public IncidentRecordStream withBpmnProcessId(final String bpmnProcessId) {
     return valueFilter(v -> bpmnProcessId.equals(v.getBpmnProcessId()));
+  }
+
+  public IncidentRecordStream withElementId(final String elementId) {
+    return valueFilter(v -> elementId.equals(v.getElementId()));
   }
 
   public IncidentRecordStream withWorkflowInstanceKey(final long workflowInstanceKey) {

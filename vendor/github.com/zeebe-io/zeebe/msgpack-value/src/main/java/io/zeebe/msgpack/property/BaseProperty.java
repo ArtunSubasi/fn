@@ -1,20 +1,13 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.msgpack.property;
 
+import io.zeebe.msgpack.MsgpackPropertyException;
 import io.zeebe.msgpack.Recyclable;
 import io.zeebe.msgpack.spec.MsgPackReader;
 import io.zeebe.msgpack.spec.MsgPackWriter;
@@ -69,7 +62,8 @@ public abstract class BaseProperty<T extends BaseValue> implements Recyclable {
     } else if (defaultValue != null) {
       return defaultValue;
     } else {
-      throw new RuntimeException(String.format("Property '%s' has no valid value", key));
+      throw new MsgpackPropertyException(
+          key, "Expected a value or default value to be specified, but has nothing");
     }
   }
 
@@ -89,9 +83,8 @@ public abstract class BaseProperty<T extends BaseValue> implements Recyclable {
     }
 
     if (valueToWrite == null) {
-      throw new RuntimeException(
-          String.format(
-              "Cannot write property '%s'; neither value, nor default value specified", key));
+      throw new MsgpackPropertyException(
+          key, "Expected a value or default value to be set before writing, but has nothing");
     }
 
     key.write(writer);
@@ -115,5 +108,25 @@ public abstract class BaseProperty<T extends BaseValue> implements Recyclable {
     builder.append(" => ");
     builder.append(value.toString());
     return builder.toString();
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+
+    if (!(o instanceof BaseProperty)) {
+      return false;
+    }
+
+    final BaseProperty<?> that = (BaseProperty<?>) o;
+    return Objects.equals(getKey(), that.getKey())
+        && Objects.equals(resolveValue(), that.resolveValue());
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getKey(), value, defaultValue, isSet);
   }
 }

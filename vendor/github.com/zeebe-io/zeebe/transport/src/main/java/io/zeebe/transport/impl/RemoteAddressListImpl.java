@@ -1,24 +1,15 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.transport.impl;
 
 import io.zeebe.transport.RemoteAddress;
 import io.zeebe.transport.RemoteAddressList;
 import io.zeebe.transport.SocketAddress;
-import java.util.Iterator;
 import java.util.function.Consumer;
 
 /** Threadsafe datastructure for indexing remote addresses and assigning streamIds. */
@@ -29,7 +20,7 @@ public class RemoteAddressListImpl implements RemoteAddressList {
   private Consumer<RemoteAddressImpl> onAddressAddedConsumer = r -> {};
 
   @Override
-  public RemoteAddressImpl getByStreamId(int streamId) {
+  public synchronized RemoteAddressImpl getByStreamId(int streamId) {
     if (streamId < size) {
       return index[streamId];
     }
@@ -48,7 +39,8 @@ public class RemoteAddressListImpl implements RemoteAddressList {
     return getByAddress(inetSocketAddress, RemoteAddressImpl.STATE_ACTIVE);
   }
 
-  public RemoteAddressImpl getByAddress(SocketAddress inetSocketAddress, int stateMask) {
+  private synchronized RemoteAddressImpl getByAddress(
+      SocketAddress inetSocketAddress, int stateMask) {
     final int currSize = size;
 
     for (int i = 0; i < currSize; i++) {
@@ -132,37 +124,8 @@ public class RemoteAddressListImpl implements RemoteAddressList {
     return result;
   }
 
-  public Iterator<RemoteAddressImpl> iterator() {
-    iterator.reset();
-    return iterator;
-  }
-
-  protected AddressIterator iterator = new AddressIterator();
-
-  protected class AddressIterator implements Iterator<RemoteAddressImpl> {
-
-    protected int curr = 0;
-    protected int currentSize;
-
-    public void reset() {
-      curr = 0;
-      currentSize = size;
-    }
-
-    @Override
-    public boolean hasNext() {
-      return curr < currentSize;
-    }
-
-    @Override
-    public RemoteAddressImpl next() {
-      final RemoteAddressImpl next = index[curr];
-      curr++;
-      return next;
-    }
-  };
-
-  public void setOnAddressAddedConsumer(Consumer<RemoteAddressImpl> onAddressAddedConsumer) {
+  public synchronized void setOnAddressAddedConsumer(
+      Consumer<RemoteAddressImpl> onAddressAddedConsumer) {
     this.onAddressAddedConsumer = onAddressAddedConsumer;
   }
 }

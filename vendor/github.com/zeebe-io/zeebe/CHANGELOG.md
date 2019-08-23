@@ -1,3 +1,337 @@
+<a name="0.20.0"></a>
+## 0.20.0 (2019-07-16)
+
+
+#### Features
+
+* **exporters/elasticsearch:**  export error events by default ([e9955a3f](https://github.com/zeebe-io/zeebe/commit/e9955a3f8d26371b3b6bdccf15428ec992c77466))
+
+#### Bug Fixes
+
+* **broker:**
+  *  set distribution count when receiving response ([3fe670a7](https://github.com/zeebe-io/zeebe/commit/3fe670a72337a7bc7c74b7f9a213f9bd31698d51))
+  *  fix JS script of DEBUG HTTP exporter ([615b2f26](https://github.com/zeebe-io/zeebe/commit/615b2f269e07d915fd9facc35b0578fad4479b21))
+* **clients/java:**  assertion for variables allow null values ([739427cd](https://github.com/zeebe-io/zeebe/commit/739427cd8ecbde7c9e1d586c9d1803d8359dff0b))
+* **docs:**  fix go get cmd ([b1162637](https://github.com/zeebe-io/zeebe/commit/b1162637aae505df46550e1c53f9de7596cd85ed))
+* **engine:**  use current state on cancel processing ([9413afbc](https://github.com/zeebe-io/zeebe/commit/9413afbc25aeb9ad907f52c12902f8f3fc562576))
+
+
+
+<a name="0.19.0"></a>
+## 0.19.0 (2019-07-02)
+
+#### Breaking Changes
+
+* **broker:**  
+  *  migrate RecordValue interfaces to protocol ([e19529f1](https://github.com/zeebe-io/zeebe/commit/e19529f1efba8b7206502bf8e3e55d372e6f62ee))
+  *  change package of asserts and generated types ([9abc82236](https://github.com/zeebe-io/zeebe/commit/9abc82236bc0cd9b2d406ada2e2a59b6e2d63485))
+  *  change type of Record#getTimestamp() to Long ([04414316](https://github.com/zeebe-io/zeebe/commit/04414316f92c82a5a452c7a52d50f7b9893b29d4))
+  *  rename keys in workflow instance creation mapping ([d32286b1](https://github.com/zeebe-io/zeebe/commit/d32286b15bc0ca8e557532bf02644a78eea67cfe))
+  *  disable variable indexing in elasticsearch exporter mappings ([44a38909](https://github.com/zeebe-io/zeebe/commit/44a38909bb729cdef144472c9d8fa4a04868bd0d))
+  *  disable indexing of deployment resource in elasticsearch ([8465e6a0](https://github.com/zeebe-io/zeebe/commit/8465e6a0fcc1ed5286b6da8e66f7935fcc92125d))
+  *  remove metrics file writer ([2aae727d](https://github.com/zeebe-io/zeebe/commit/2aae727d229a2fd4718496a3ec328585712eb164))
+  *  rename document to variables in VariableDocumentRecord ([41975975](https://github.com/zeebe-io/zeebe/commit/41975975c207385b57622da5d71c2c5df98acce6))
+  *  flatten RecordMetadata into Record ([6593979f](https://github.com/zeebe-io/zeebe/commit/6593979f19174861fe49c58204bc556cef1503fd))
+  *  squash job headers into record value ([46c8061d](https://github.com/zeebe-io/zeebe/commit/46c8061d82120cecdbd6add93268e9b6b6a5a65c))
+  *  change custom headers to Map<String,String> ([2d05e3bd](https://github.com/zeebe-io/zeebe/commit/2d05e3bdf56b15efa3f3b6ac5a1056cf0deb9126))
+  *  IncidentRecord return ErrorType instead of String ([79e2c080](https://github.com/zeebe-io/zeebe/commit/79e2c080e4b7d4d1368db896f63dd0b473baf598))
+  *  remove producer id from record ([ff6b1dd5](https://github.com/zeebe-io/zeebe/commit/ff6b1dd5b6516110c105e7dd949d154a519f3179))
+  *  rework WorkflowInstanceCreationRecordValue ([7ee99e7e](https://github.com/zeebe-io/zeebe/commit/7ee99e7e91939ee58d94dcdf6bd36e1bbbb1a06a))
+* **clients/go:**  flatten job headers ([1a1555de](https://github.com/zeebe-io/zeebe/commit/1a1555de62ce38cf0ddcacd7577ed8160d8a1ac1))
+* **clients/java:**  reorganize packages ([cdccc34c](https://github.com/zeebe-io/zeebe/commit/cdccc34c2fd8daa41b398b5bc46a20aea337f096))
+
+#### Features
+
+* **broker:**  
+  *  filter duplicated deployments ([c34e5995](https://github.com/zeebe-io/zeebe/commit/c34e59958afc858b1f164b086a6245820215bec5))
+  *  expose elasticsearch exporter metrics ([62448c75](https://github.com/zeebe-io/zeebe/commit/62448c757edd197c3a6e88722b2f3979016e63cc))
+  *  add exporter back off retry strategy ([9a92c04b](https://github.com/zeebe-io/zeebe/commit/9a92c04bb0d631076c2b7f3dbc08804952e1dbf7))
+* **clients/java:**  
+  *  allow job handlers to throw exceptions ([77192a92](https://github.com/zeebe-io/zeebe/commit/77192a92b614bd165c0ce9af70473f08e5d1625e))
+  *   allow to set request timeout ([2d7ac6b9](https://github.com/zeebe-io/zeebe/commit/2d7ac6b9476e2731fb012b37f8ac61f2134bb073))
+* **gateway:**  add grpc metrics ([aa7f47a6](https://github.com/zeebe-io/zeebe/commit/aa7f47a6f3921503d5647414fcbd8633da880d7f))
+
+#### Bug Fixes
+
+* **broker:**
+  *  fixed missing distributed CREATEs during restart ([a24c04f4](https://github.com/zeebe-io/zeebe/commit/a24c04f4f114e731945241d38689cd4e749d65ed))
+  *  reject deployments with duplicate process ids ([46c929e4](https://github.com/zeebe-io/zeebe/commit/46c929e40406c40ba8d81d022da8f4bd43174bd3))
+  *  copy deployment resources ([b79697a1](https://github.com/zeebe-io/zeebe/commit/b79697a1046d9e4f59503255d2cafa262f41715c))
+  *   fix transformation to get deployed workflows ([743fe20a](https://github.com/zeebe-io/zeebe/commit/743fe20a492e5cf3e682b2d93b978bb69de1eed6))
+* **docker:**  remove deprecated JVM option ([950795f8](https://github.com/zeebe-io/zeebe/commit/950795f869367d1eb13036b1492a84486284d233))
+
+<a name="0.19.0-alpha3"></a>
+## 0.19.0-alpha3 (2019-06-28)
+
+#### Breaking Changes
+
+* **broker:**  change type of Record#getTimestamp() to Long ([04414316](https://github.com/zeebe-io/zeebe/commit/04414316f92c82a5a452c7a52d50f7b9893b29d4))
+
+#### Features
+
+* **broker:**
+  *  expose elasticsearch exporter metrics ([62448c75](https://github.com/zeebe-io/zeebe/commit/62448c757edd197c3a6e88722b2f3979016e63cc))
+  *  add exporter back off retry strategy ([9a92c04b](https://github.com/zeebe-io/zeebe/commit/9a92c04bb0d631076c2b7f3dbc08804952e1dbf7))
+* **clients/java:**  allow job handlers to throw exceptions ([77192a92](https://github.com/zeebe-io/zeebe/commit/77192a92b614bd165c0ce9af70473f08e5d1625e))
+* **gateway:**  add grpc metrics ([aa7f47a6](https://github.com/zeebe-io/zeebe/commit/aa7f47a6f3921503d5647414fcbd8633da880d7f))
+
+#### Bug Fixes
+
+* **broker:**
+  *  reject deployments with duplicate process ids ([46c929e4](https://github.com/zeebe-io/zeebe/commit/46c929e40406c40ba8d81d022da8f4bd43174bd3))
+  *  copy deployment resources ([b79697a1](https://github.com/zeebe-io/zeebe/commit/b79697a1046d9e4f59503255d2cafa262f41715c))
+
+
+<a name="0.19.0-alpha2"></a>
+## 0.19.0-alpha2 (2019-06-25)
+
+
+#### Breaking Changes
+
+* **broker:**
+  *  rename keys in workflow instance creation mapping ([d32286b1](https://github.com/zeebe-io/zeebe/commit/d32286b15bc0ca8e557532bf02644a78eea67cfe))
+  *  disable variable indexing in elasticsearch exporter mappings ([44a38909](https://github.com/zeebe-io/zeebe/commit/44a38909bb729cdef144472c9d8fa4a04868bd0d))
+  *  disable indexing of deployment resource in elasticsearch ([8465e6a0](https://github.com/zeebe-io/zeebe/commit/8465e6a0fcc1ed5286b6da8e66f7935fcc92125d))
+  *  remove metrics file writer ([2aae727d](https://github.com/zeebe-io/zeebe/commit/2aae727d229a2fd4718496a3ec328585712eb164))
+  *  rename document to variables in VariableDocumentRecord ([41975975](https://github.com/zeebe-io/zeebe/commit/41975975c207385b57622da5d71c2c5df98acce6))
+  *  flatten RecordMetadata into Record ([6593979f](https://github.com/zeebe-io/zeebe/commit/6593979f19174861fe49c58204bc556cef1503fd))
+  *  squash job headers into record value ([46c8061d](https://github.com/zeebe-io/zeebe/commit/46c8061d82120cecdbd6add93268e9b6b6a5a65c))
+  *  change custom headers to Map<String,String> ([2d05e3bd](https://github.com/zeebe-io/zeebe/commit/2d05e3bdf56b15efa3f3b6ac5a1056cf0deb9126))
+  *  IncidentRecord return ErrorType instead of String ([79e2c080](https://github.com/zeebe-io/zeebe/commit/79e2c080e4b7d4d1368db896f63dd0b473baf598))
+  *  remove producer id from record ([ff6b1dd5](https://github.com/zeebe-io/zeebe/commit/ff6b1dd5b6516110c105e7dd949d154a519f3179))
+  *  change return type of Record#getVariables() to map ([d0e9bf200](https://github.com/zeebe-io/zeebe/commit/d0e9bf2000728bc9bb420b525072a29f3a5530f9))
+  *  rework WorkflowInstanceCreationRecordValue ([7ee99e7e](https://github.com/zeebe-io/zeebe/commit/7ee99e7e91939ee58d94dcdf6bd36e1bbbb1a06a))
+* **clients/go:**  flatten job headers ([1a1555de](https://github.com/zeebe-io/zeebe/commit/1a1555de62ce38cf0ddcacd7577ed8160d8a1ac1))
+* **clients/java:**  reorganize packages ([cdccc34c](https://github.com/zeebe-io/zeebe/commit/cdccc34c2fd8daa41b398b5bc46a20aea337f096))
+
+#### Features
+
+* **broker:**  filter duplicated deployments ([c34e5995](https://github.com/zeebe-io/zeebe/commit/c34e59958afc858b1f164b086a6245820215bec5))
+
+
+<a name="0.19.0-alpha1"></a>
+## 0.19.0-alpha1 (2019-06-18)
+
+#### Breaking Changes
+
+* **broker:**
+  *  migrate RecordValue interfaces to protocol ([e19529f1](https://github.com/zeebe-io/zeebe/commit/e19529f1efba8b7206502bf8e3e55d372e6f62ee))
+  *  change package of asserts and generated types ([9abc82236](https://github.com/zeebe-io/zeebe/commit/9abc82236bc0cd9b2d406ada2e2a59b6e2d63485))
+
+#### Bug Fixes
+
+* **docker:**  remove deprecated JVM option ([950795f8](https://github.com/zeebe-io/zeebe/commit/950795f869367d1eb13036b1492a84486284d233))
+* **broker:**  fix transformation to get deployed workflows ([743fe20a](https://github.com/zeebe-io/zeebe/commit/743fe20a492e5cf3e682b2d93b978bb69de1eed6))
+
+#### Features
+
+* **clients/java:**  allow to set request timeout ([2d7ac6b9](https://github.com/zeebe-io/zeebe/commit/2d7ac6b9476e2731fb012b37f8ac61f2134bb073))
+
+
+
+<a name="0.18.0"></a>
+## 0.18.0 (2019-06-06)
+
+#### Breaking Changes
+
+* **broker:**
+  *  rename port configuration ([02e3c472](https://github.com/zeebe-io/zeebe/commit/02e3c4720800c8067055efdd4b76d06786dcb007))
+  *  rename defaultLogSegmentSize to logSegmentSize in configuration ([915fd5e5](https://github.com/zeebe-io/zeebe/commit/915fd5e571b41bcf76dad801c448acf5d24ce544))
+* **exporter-api:**  move Exporter interface to upper api package ([faac031f](https://github.com/zeebe-io/zeebe/commit/faac031f3b84557793778b504dd02699477bdf0a))
+* **protocol:**  move protocol class to upper level package ([8f580c51](https://github.com/zeebe-io/zeebe/commit/8f580c51c3f70efb16f39c08fdff6ee8792e3bbf))
+* **gateway-protocol:**  remove control messages (list and get workflows) ([8a6035676](https://github.com/zeebe-io/zeebe/commit/8a6035676fb0eaf2bc79d1e3eacad8e683f787bb))
+
+
+#### Bug Fixes
+
+* **broker:**
+  *  rename port configuration ([02e3c472](https://github.com/zeebe-io/zeebe/commit/02e3c4720800c8067055efdd4b76d06786dcb007))
+  *  rename defaultLogSegmentSize to logSegmentSize in configuration ([915fd5e5](https://github.com/zeebe-io/zeebe/commit/915fd5e571b41bcf76dad801c448acf5d24ce544))
+  *  fix lost messages on rejected correlation ([cdcddd86](https://github.com/zeebe-io/zeebe/commit/cdcddd863b1d3f591839319840f9f5ca8c3bc076))
+  *  fix intermediate catch event XML order dependency ([5c25ecd1](https://github.com/zeebe-io/zeebe/commit/5c25ecd17aa55f8cc223868df59530b412f9cfca))
+  *  fix XOR gateway being dependent on element position in XML ([bdd88dc1](https://github.com/zeebe-io/zeebe/commit/bdd88dc1465d522eebb3032976eb10a85cfa9c24))
+  *  do not skip partition on job activation ([80307830](https://github.com/zeebe-io/zeebe/commit/80307830bd9e750e5a7ec82829032a9f1cbafa05))
+  *  fix invalid state when cancelling with job ([f990274a](https://github.com/zeebe-io/zeebe/commit/f990274af2647a6b51f52d448a3b5829824bb898))
+  *  fix reading empty string token ([638e0631](https://github.com/zeebe-io/zeebe/commit/638e0631514160bdc74b280f61ac3c2cf44aca75))
+* **exporter-api:**  move Exporter interface to upper api package ([faac031f](https://github.com/zeebe-io/zeebe/commit/faac031f3b84557793778b504dd02699477bdf0a))
+* **gateway:**  fix topology response ([ea92e981](https://github.com/zeebe-io/zeebe/commit/ea92e98102e1acb1bbefce822aaa796918504e54))
+* **protocol:**  move protocol class to upper level package ([8f580c51](https://github.com/zeebe-io/zeebe/commit/8f580c51c3f70efb16f39c08fdff6ee8792e3bbf))
+
+#### Features
+
+* **broker:**  add workflow key to incident record ([73477e87](https://github.com/zeebe-io/zeebe/commit/73477e875a8575c0e9f278df92858595b4ae821f))
+* **clients/java:**  send stack trace of unhandled worker exception to Operate ([7ceea4ce](https://github.com/zeebe-io/zeebe/commit/7ceea4ce104d1421eff1965f8b36fa499c9b2305))
+* **exporter-api:**  allow exporters to throw checked exceptions in configure method ([df52c92b](https://github.com/zeebe-io/zeebe/commit/df52c92b3edeb655462e2f5bcb1253526a8d8181))
+
+
+<a name="0.17.0"></a>
+## 0.17.0 (2019-04-02)
+
+
+#### Breaking Changes
+
+* **broker:**
+  * renamed payload to variables ([e2fed8bc](https://github.com/zeebe-io/zeebe/commit/e2fed8bc7d15092deb701cba5f0b158d250c2485))
+  * input/output mappings and correlation key expressions access variables by name ([665393f0](https://github.com/zeebe-io/zeebe/commit/665393f0206c54cf0373cc7ac54edeec31b3f460))
+* **clients:**  rename bufferSize to maxJobsActive ([2373c264](https://github.com/zeebe-io/zeebe/commit/2373c2649da13755e964f83a530d9adb3e6798ed))
+* **json-el:**  conditions access variables by name instead of JSON path ([645297e8](https://github.com/zeebe-io/zeebe/commit/645297e84eb678707ea56a896421c1c1b3587314))
+* **maven:**  prefix all maven artifacts with zeebe ([b2bac603](https://github.com/zeebe-io/zeebe/commit/b2bac603d565d581827dbcee1470d382a4e6e3b5))
+
+#### Features
+
+* **bpmn-model:**  reject end events with outgoing sequence flows ([50582295](https://github.com/zeebe-io/zeebe/commit/50582295a9b7588c27798173a7135398b7239357))
+* **broker:**
+  * add workflow key to variable record ([624d32a2](https://github.com/zeebe-io/zeebe/commit/624d32a2fc3f3c9941fbe2603cb32e1db1a6ac9d))
+  * input/output mappings and correlation key expressions access variables by name ([665393f0](https://github.com/zeebe-io/zeebe/commit/665393f0206c54cf0373cc7ac54edeec31b3f460))
+* **exporter:**  export error record ([b35728bf](https://github.com/zeebe-io/zeebe/commit/b35728bfe3542a6c5beccea5dcfd290c02853d2e))
+* **json-el:**  conditions access variables by name instead of JSON path ([645297e8](https://github.com/zeebe-io/zeebe/commit/645297e84eb678707ea56a896421c1c1b3587314))
+* **protocol:**  introduce new ErrorRecord ([21ca50a8](https://github.com/zeebe-io/zeebe/commit/21ca50a8ac065b7f33daa6908d83f7924668679b))
+
+#### Bug Fixes
+
+* **broker:**
+  *  prevent unnecessary message subscription closing ([37a03bf0](https://github.com/zeebe-io/zeebe/commit/37a03bf06458f0e710b592ca74c256414283a4bd))
+  *  prevent NPE in delayed message subscription closing ([d733cee5](https://github.com/zeebe-io/zeebe/commit/d733cee5c882ae1e9bc3e7d93e32d9c05bb948c4))
+  *  renamed payload to variables ([e2fed8bc](https://github.com/zeebe-io/zeebe/commit/e2fed8bc7d15092deb701cba5f0b158d250c2485))
+  *  reset reused event scope instance ([f9c3e7f3](https://github.com/zeebe-io/zeebe/commit/f9c3e7f363d8be16e9cbd7001f48d8ed23821f56))
+  *  stop iterating jobs if job batch reached max capacity ([91f276d9](https://github.com/zeebe-io/zeebe/commit/91f276d954df4e68c665c584e0c737fa716b3e63))
+  *  increase gateway transport buffer to default 64 megabyte ([fbf07e29](https://github.com/zeebe-io/zeebe/commit/fbf07e29562f47d77e18e32d34eda829b445bd56))
+* **clients:**  rename bufferSize to maxJobsActive ([2373c264](https://github.com/zeebe-io/zeebe/commit/2373c2649da13755e964f83a530d9adb3e6798ed))
+* **clients/java:**  clarify outdated update job retries java doc ([5881187f](https://github.com/zeebe-io/zeebe/commit/5881187f619e0addd9aa81c7f7f30d3fc3bb94f0))
+* **exporters/elasticsearch-exporter:**  migrates ES to pkg io.zeebe.exporter ([7106f167](https://github.com/zeebe-io/zeebe/commit/7106f16755c52d32ffc8709d5a83e3c6ba4b067b))
+* **logstreams:**
+  *  removed StreamProcessorControllerTest race condition ([3ad0e3ac](https://github.com/zeebe-io/zeebe/commit/3ad0e3ac05304f5aa6f114e1568e9c2a013bf647))
+  *  removed race condition from LogBlockIndexWriterTest ([134c5b1b](https://github.com/zeebe-io/zeebe/commit/134c5b1b424ca123e6e079d385544f64c6387327))
+* **maven:**  prefix all maven artifacts with zeebe ([b2bac603](https://github.com/zeebe-io/zeebe/commit/b2bac603d565d581827dbcee1470d382a4e6e3b5))
+
+
+
+<a name="0.16.4"></a>
+## 0.16.4 (2019-03-22)
+
+
+#### Bug Fixes
+
+* **broker:**  use default RocksDB column family options ([4393958b](https://github.com/zeebe-io/zeebe/commit/4393958b76f115a565d38ec8b92af66d75215a00))
+
+
+<a name="0.16.3"></a>
+## 0.16.3 (2019-03-15)
+
+
+#### Bug Fixes
+
+* **broker:**
+  *  stop iterating jobs if job batch reached max capacity ([cc90c04a](https://github.com/zeebe-io/zeebe/commit/cc90c04a3e0e5d625c1cae36d4ae3c9bd446a579))
+  *  increase gateway transport buffer to default 64 megabyte ([449ea10e](https://github.com/zeebe-io/zeebe/commit/449ea10e61712d768cccb166ecc8f5ed79e2f71d))
+
+
+
+<a name="0.16.2"></a>
+## 0.16.2 (2019-03-11)
+
+
+#### Bug Fixes
+
+* **broker:**
+  * update workflow instance created metric correctly ([a627ea78](https://github.com/zeebe-io/zeebe/commit/a627ea78d09dec22cdc0474165e8a7e37055a2e1))
+  * time out trigger respects dispatcher backpressure ([41037895](https://github.com/zeebe-io/zeebe/commit/4103789534bcc75a97a795a102580ba8ec2665ed))
+
+#### Features
+
+* **broker:**  add HTTP metrics endpoint ([131a57fc](https://github.com/zeebe-io/zeebe/commit/131a57fc27cff00417a677d6e4ddfa8cffd9940a))
+
+
+
+<a name="0.16.1"></a>
+## 0.16.1 (2019-03-07)
+
+
+#### Features
+
+* **broker:**  condition expression is part of incident message ([447091aa](https://github.com/zeebe-io/zeebe/commit/447091aa3df1c91a17c6f4fd3ef9800f894a7078))
+* **clients/go:**  replace update payload with set variables ([49ae37ab](https://github.com/zeebe-io/zeebe/commit/49ae37abc1f54eb6f68e9a5b8621b818802b2dc1))
+* **exporters/elasticsearch-exporter:**  adds basic HTTP auth to exporter ([791ea802](https://github.com/zeebe-io/zeebe/commit/791ea802d682fcc15678340d29163043028038fc))
+
+#### Bug Fixes
+
+* **broker:**
+  *  set correct license information in pom file ([a6bd1ec8](https://github.com/zeebe-io/zeebe/commit/a6bd1ec8b81c7dae24c805b44f87ceb135dc6edd))
+  *  send close message subscription command to correct partition ([b5600170](https://github.com/zeebe-io/zeebe/commit/b56001709b4693acd037f92e4724119a991cf2ce))
+  *  set correct BPMN element type for sequence flows ([74f93a3e](https://github.com/zeebe-io/zeebe/commit/74f93a3e9654c89309a79c6ccf47e6a23081859d))
+  *  set repetitions and reset timer record ([418eedc9](https://github.com/zeebe-io/zeebe/commit/418eedc9be1a8f3a827d4f9cf81880ca0ef145d3))
+  *  only distribute deployments from first partition ([a2a069c9](https://github.com/zeebe-io/zeebe/commit/a2a069c9e70430892c2418710bf1c58ee75b9b76))
+  *  fix timer start events key ([833f3246](https://github.com/zeebe-io/zeebe/commit/833f3246f668537044587fc3cb255c9789d9bfae))
+  *  fix overflows ([5833ee56](https://github.com/zeebe-io/zeebe/commit/5833ee563aa30300bd34daf6b38bad225bf8968d))
+  *  stop iterating after prefix was exceeded ([c5c38ba9](https://github.com/zeebe-io/zeebe/commit/c5c38ba9a3cb840ea7c7105376c2d7b9a263e23d))
+
+
+
+<a name="0.15.1"></a>
+## 0.15.1 (2019-02-26)
+
+
+#### Bug Fixes
+
+* **broker:**  stop iterating after prefix was exceeded ([0e873c6a](https://github.com/zeebe-io/zeebe/commit/0e873c6a90708be762ca40119f839d3efef2cb87))
+
+
+
+<a name="0.15.0"></a>
+## 0.15.0 (2019-02-12)
+
+
+#### Bug Fixes
+
+* **broker:**
+  *  reject deployment which contains at least one invalid resource ([fd478adc](https://github.com/zeebe-io/zeebe/commit/fd478adc2691b427c54389461c6f4bdd685d7267))
+  *  ensure YAML transformation does not break the msgpack serialization ([575178cf](https://github.com/zeebe-io/zeebe/commit/575178cf87a05fff1db6ecc8eb31d89a94a547b5))
+  *  limit jobs in JobBatchRecord to 65Kb ([6324a8e5](https://github.com/zeebe-io/zeebe/commit/6324a8e5b905cfc10b38e8688f94cb381b132ff4))
+  *  reject create workflowinstance command when there is no none start event ([7651fcc7](https://github.com/zeebe-io/zeebe/commit/7651fcc73cbe50639e60fb40caf3c9c6fe06b8fb))
+  *  expand log block index if capacity is reached ([1b6adfeb](https://github.com/zeebe-io/zeebe/commit/1b6adfeb5060dd4ae6b1ba27d6b706898e4b9b15))
+  *  fix state interference with processor ([5b948b09](https://github.com/zeebe-io/zeebe/commit/5b948b09dcbe19b4fdae5e0d98bd5f727d7855fb))
+  *  ignore empty or invalid task headers ([7cb055c8](https://github.com/zeebe-io/zeebe/commit/7cb055c8c858477f84b05516eca74a0b0e1aff2f))
+  *  reject empty correlation key ([879ae05a](https://github.com/zeebe-io/zeebe/commit/879ae05a35d7b582ff6158560917d32f566ec616))
+  *  event-based gateways can't be triggered twice ([e5c38366](https://github.com/zeebe-io/zeebe/commit/e5c3836613203f43c98e5c3415278094a4c4399e))
+  *  prevent canceling of element instances ([a9b16ae0](https://github.com/zeebe-io/zeebe/commit/a9b16ae05266fed49569ffc676ac3576b2a126cc))
+  *  don't open subscription if incident is raised ([6e2f3671](https://github.com/zeebe-io/zeebe/commit/6e2f3671862b85dfa2dbf833f71674898b9ee483))
+  *  save the last exported record position before closing the state * ensure the RocksDB directory is deleted ([cd912d8f](https://github.com/zeebe-io/zeebe/commit/cd912d8fb3e2ebb378bc34570f4484cfdbd159f2))
+  *  close gateway before service containers ([cd74ac24](https://github.com/zeebe-io/zeebe/commit/cd74ac24911b94931d31c78ed38cae8b0171436a))
+  *  ignore unreferenced messages in transformer ([6c9f1035](https://github.com/zeebe-io/zeebe/commit/6c9f1035b3e33eee7b0cedaa4554ea206d7d3753))
+  *  Convert numeric correlation key to string ([953ec7b7](https://github.com/zeebe-io/zeebe/commit/953ec7b7632f77205bd5ae7334f38b427a932009))
+  * add explicit endianness in logstream ([d8dbd667](https://github.com/zeebe-io/zeebe/commit/d8dbd6670dea805ba1154f8a91cbeb6987f601ad))
+  * avoid overflow on String16 type ([bf2fb4cd](https://github.com/zeebe-io/zeebe/commit/bf2fb4cdd2dcfa10b91b0dcde05160def289a5f6))
+
+#### Features
+
+* **broker:**
+  *  add workflowInstanceKey to variable records ([35b2f1e4](https://github.com/zeebe-io/zeebe/commit/35b2f1e45351d29109a2fef0810116ca6661f72f))
+  *  unify lifecycle of flow elements ([7c2589ab](https://github.com/zeebe-io/zeebe/commit/7c2589abf5ca310e8fc3909cc2b8c042e45db55a))
+  *  improve error reporting in gRPC API ([c02e6d80](https://github.com/zeebe-io/zeebe/commit/c02e6d801a1cb2748767b36a718b31e8cca5fbf1))
+  *  added bpmn element type to WorkflowInstanceRecord ([09e7e0c5](https://github.com/zeebe-io/zeebe/commit/09e7e0c5b4159185a475b3b341d7c4bfa45b360b))
+  *  export variable records to elasticsearch ([f96aa8fc](https://github.com/zeebe-io/zeebe/commit/f96aa8fce13ba9c94f083195d92cc791ecebc6bc))
+  *  consistent and meaningful error message format ([ff34a27a](https://github.com/zeebe-io/zeebe/commit/ff34a27ae719ae42ade4248f1a7e17cae749022e))
+  *  add list of variables to be fetched on activation to protocol ([7a7d63ca](https://github.com/zeebe-io/zeebe/commit/7a7d63ca8835602e4203d437259eef342b8b7640))
+  *  added support for timeDate timer definitions ([ae1823a0](https://github.com/zeebe-io/zeebe/commit/ae1823a0d4dd2d2a0aa10f5a7bd4a418644e165c))
+  *  support timer start event ([f28c318b](https://github.com/zeebe-io/zeebe/commit/f28c318b25c3ffa6654016dae45e8fe12a4a9149))
+  *  support non-interrupting message boundary events ([4fa149fb](https://github.com/zeebe-io/zeebe/commit/4fa149fbaf29bef34e30001b9fa28573bd9e7d39))
+  *  support message start events ([2364e08c](https://github.com/zeebe-io/zeebe/commit/2364e08cdcd8f59a87b37c51cb9db7d9e4d84a42)) ([157e66e2](https://github.com/zeebe-io/zeebe/commit/157e66e21ec135216e3f69724395c14fe6849c2a))
+  *  write variable events ([40b32063](https://github.com/zeebe-io/zeebe/commit/40b3206329e1e19c18f98d557eb3403dfebe6d3b))
+  *  propagate variables on presence of out mappings ([64f45fbe](https://github.com/zeebe-io/zeebe/commit/64f45fbe29ba51417e75c848c730569ba47d0c1e))
+  *  allow updating job retries in all job states ([6e056f7f](https://github.com/zeebe-io/zeebe/commit/6e056f7f21c099dc26dfa61a554eb3b13f0f724f))
+  *  support non-interrupting timer boundary events ([84313356](https://github.com/zeebe-io/zeebe/commit/8431335624d02941e90b568c13e74b847f65f3a7))
+  * allow non-strict condtions ([c8f4480d](https://github.com/zeebe-io/zeebe/commit/c8f4480d707048ad9ae4dfcda685483485cda2e0))
+  *  provide integration test utitilities for exporter authors ([5cbbcfc9](https://github.com/zeebe-io/zeebe/commit/5cbbcfc948b7d16e6a9f7f4641774675f60ac219))
+  *  adds a slew of Exporter test utilities ([899221ea](https://github.com/zeebe-io/zeebe/commit/899221ead4b03a2c017fcb410ba22bc4367a6985))
+* **clients/go:**
+  * add optional list of variables to activate jobs/job worker ([911aeea5](https://github.com/zeebe-io/zeebe/commit/911aeea5f08bcd02239236d18b140a43c1031f4a))
+  * Add omitempty-ignoring object marshaller method to go api ([4823b42b](https://github.com/zeebe-io/zeebe/commit/4823b42b865bdc4e14be96c6d55cdd4e6dc4502b))
+* **clients/java:**
+    *  add optional list of variables to activate jobs/job worker ([6eabff25](https://github.com/zeebe-io/zeebe/commit/6eabff250e1226ac197a0c5f2c327f80e79bc99a))
+    *  propagate job worker exception message to broker ([23a70ea8](https://github.com/zeebe-io/zeebe/commit/23a70ea83a69fd9005dd5ebd38403b18f18939aa))
+* **clients/zbctl:**  set error message in fail command to stderr content ([8f8b3889](https://github.com/zeebe-io/zeebe/commit/8f8b3889079559a83a5ec3cdc83fa40f80321f3b))
+
+
 <a name="0.14.0"></a>
 ## 0.14.0 (2018-12-04)
 

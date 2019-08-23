@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.logstreams.log;
 
@@ -53,6 +45,14 @@ public interface LogStreamReader extends Iterator<LoggedEvent>, CloseableSilentl
   void wrap(LogStream log, long position);
 
   /**
+   * Seeks to the event after the given position. On negative position it seeks to the first event.
+   *
+   * @param position the position which should be used
+   * @return <code>true</code>, if the position is negative or exists
+   */
+  boolean seekToNextEvent(long position);
+
+  /**
    * Seek to the given log position if exists. Otherwise, it seek to the next position after this.
    *
    * @param position the position in the log to seek to
@@ -72,6 +72,19 @@ public interface LogStreamReader extends Iterator<LoggedEvent>, CloseableSilentl
    * @return the current log position, or negative value if the log is empty or not initialized
    */
   long getPosition();
+
+  /**
+   * The last log storage address, from which the last block of events was read.
+   *
+   * <p/>
+   * Useful if you want to found out the related block address, then just seek to a given position
+   * and call {@link #lastReadAddress).
+   *
+   * *Note:* The returned address is not the exact log event address.
+   *
+   * @return the last log storage address, from which the last block of events was read.
+   */
+  long lastReadAddress();
 
   /**
    * Returns true if the log stream reader was closed.

@@ -1,28 +1,19 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.exporter;
 
 import io.zeebe.exporter.ElasticsearchExporterConfiguration.IndexConfiguration;
-import io.zeebe.exporter.context.Context;
-import io.zeebe.exporter.context.Controller;
-import io.zeebe.exporter.record.Record;
-import io.zeebe.exporter.record.RecordMetadata;
-import io.zeebe.exporter.spi.Exporter;
-import io.zeebe.protocol.clientapi.RecordType;
-import io.zeebe.protocol.clientapi.ValueType;
+import io.zeebe.exporter.api.Exporter;
+import io.zeebe.exporter.api.context.Context;
+import io.zeebe.exporter.api.context.Controller;
+import io.zeebe.protocol.record.Record;
+import io.zeebe.protocol.record.RecordType;
+import io.zeebe.protocol.record.ValueType;
 import java.time.Duration;
 import org.slf4j.Logger;
 
@@ -38,6 +29,7 @@ public class ElasticsearchExporter implements Exporter {
   private ElasticsearchClient client;
 
   private long lastPosition = -1;
+  private boolean indexTemplatesCreated;
 
   @Override
   public void configure(Context context) {
@@ -45,13 +37,15 @@ public class ElasticsearchExporter implements Exporter {
     configuration =
         context.getConfiguration().instantiate(ElasticsearchExporterConfiguration.class);
     log.debug("Exporter configured with {}", configuration);
+
+    context.setFilter(new ElasticsearchRecordFilter(configuration));
   }
 
   @Override
   public void open(Controller controller) {
     this.controller = controller;
     client = createClient();
-    createIndexTemplates();
+
     scheduleDelayedFlush();
     log.info("Exporter opened");
   }
@@ -74,10 +68,11 @@ public class ElasticsearchExporter implements Exporter {
 
   @Override
   public void export(Record record) {
-    if (shouldIndexRecord(record)) {
-      client.index(record);
+    if (!indexTemplatesCreated) {
+      createIndexTemplates();
     }
 
+    client.index(record);
     lastPosition = record.getPosition();
 
     if (client.shouldFlush()) {
@@ -111,6 +106,9 @@ public class ElasticsearchExporter implements Exporter {
       if (index.deployment) {
         createValueIndexTemplate(ValueType.DEPLOYMENT);
       }
+      if (index.error) {
+        createValueIndexTemplate(ValueType.ERROR);
+      }
       if (index.incident) {
         createValueIndexTemplate(ValueType.INCIDENT);
       }
@@ -126,16 +124,24 @@ public class ElasticsearchExporter implements Exporter {
       if (index.messageSubscription) {
         createValueIndexTemplate(ValueType.MESSAGE_SUBSCRIPTION);
       }
-      if (index.raft) {
-        createValueIndexTemplate(ValueType.RAFT);
+      if (index.variable) {
+        createValueIndexTemplate(ValueType.VARIABLE);
+      }
+      if (index.variableDocument) {
+        createValueIndexTemplate(ValueType.VARIABLE_DOCUMENT);
       }
       if (index.workflowInstance) {
         createValueIndexTemplate(ValueType.WORKFLOW_INSTANCE);
+      }
+      if (index.workflowInstanceCreation) {
+        createValueIndexTemplate(ValueType.WORKFLOW_INSTANCE_CREATION);
       }
       if (index.workflowInstanceSubscription) {
         createValueIndexTemplate(ValueType.WORKFLOW_INSTANCE_SUBSCRIPTION);
       }
     }
+
+    indexTemplatesCreated = true;
   }
 
   private void createRootIndexTemplate() {
@@ -152,47 +158,22 @@ public class ElasticsearchExporter implements Exporter {
     }
   }
 
-  private boolean shouldIndexRecord(Record<?> record) {
-    final RecordMetadata metadata = record.getMetadata();
-    return shouldIndexRecordType(metadata.getRecordType())
-        && shouldIndexValueType(metadata.getValueType());
-  }
+  private class ElasticsearchRecordFilter implements Context.RecordFilter {
 
-  private boolean shouldIndexValueType(ValueType valueType) {
-    switch (valueType) {
-      case DEPLOYMENT:
-        return configuration.index.deployment;
-      case INCIDENT:
-        return configuration.index.incident;
-      case JOB:
-        return configuration.index.job;
-      case JOB_BATCH:
-        return configuration.index.jobBatch;
-      case MESSAGE:
-        return configuration.index.message;
-      case MESSAGE_SUBSCRIPTION:
-        return configuration.index.messageSubscription;
-      case RAFT:
-        return configuration.index.raft;
-      case WORKFLOW_INSTANCE:
-        return configuration.index.workflowInstance;
-      case WORKFLOW_INSTANCE_SUBSCRIPTION:
-        return configuration.index.workflowInstanceSubscription;
-      default:
-        return false;
+    private final ElasticsearchExporterConfiguration configuration;
+
+    ElasticsearchRecordFilter(ElasticsearchExporterConfiguration configuration) {
+      this.configuration = configuration;
     }
-  }
 
-  private boolean shouldIndexRecordType(RecordType recordType) {
-    switch (recordType) {
-      case EVENT:
-        return configuration.index.event;
-      case COMMAND:
-        return configuration.index.command;
-      case COMMAND_REJECTION:
-        return configuration.index.rejection;
-      default:
-        return false;
+    @Override
+    public boolean acceptType(RecordType recordType) {
+      return configuration.shouldIndexRecordType(recordType);
+    }
+
+    @Override
+    public boolean acceptValue(ValueType valueType) {
+      return configuration.shouldIndexValueType(valueType);
     }
   }
 }

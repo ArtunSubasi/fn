@@ -1,24 +1,15 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.dispatcher;
 
 import static io.zeebe.dispatcher.impl.PositionUtil.position;
 
 import io.zeebe.dispatcher.impl.log.DataFrameDescriptor;
-import io.zeebe.util.metrics.Metric;
 import io.zeebe.util.sched.ActorCondition;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
@@ -43,7 +34,6 @@ public class BlockPeek implements Iterable<DirectBuffer> {
   protected DataFrameIterator iterator = new DataFrameIterator();
   private ActorCondition dataConsumed;
   private int fragmentCount;
-  private Metric fragmentsConsumedMetric;
 
   public void setBlock(
       final ByteBuffer byteBuffer,
@@ -54,8 +44,7 @@ public class BlockPeek implements Iterable<DirectBuffer> {
       final int blockLength,
       final int newPartitionId,
       final int newPartitionOffset,
-      int fragmentCount,
-      Metric fragmentsConsumedMetric) {
+      int fragmentCount) {
     this.byteBuffer = byteBuffer;
     this.subscriberPosition = position;
     this.dataConsumed = dataConsumed;
@@ -65,7 +54,6 @@ public class BlockPeek implements Iterable<DirectBuffer> {
     this.newPartitionId = newPartitionId;
     this.newPartitionOffset = newPartitionOffset;
     this.fragmentCount = fragmentCount;
-    this.fragmentsConsumedMetric = fragmentsConsumedMetric;
 
     byteBuffer.limit(bufferOffset + blockLength);
     byteBuffer.position(bufferOffset);
@@ -113,8 +101,17 @@ public class BlockPeek implements Iterable<DirectBuffer> {
     updatePosition();
   }
 
+  /** Returns the position of the next block if this block was marked completed. */
+  public long getNextPosition() {
+    final long newPosition = position(newPartitionId, newPartitionOffset);
+    if (subscriberPosition.get() < newPosition) {
+      return newPosition;
+    } else {
+      return subscriberPosition.get();
+    }
+  }
+
   protected void updatePosition() {
-    fragmentsConsumedMetric.getAndAddOrdered(fragmentCount);
     subscriberPosition.proposeMaxOrdered(position(newPartitionId, newPartitionOffset));
     dataConsumed.signal();
   }

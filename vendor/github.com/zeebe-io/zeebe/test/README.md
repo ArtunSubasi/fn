@@ -11,7 +11,7 @@ Add `zeebe-test` as test dependency to your project.
   <dependencies>
     <dependency>
       <groupId>io.zeebe</groupId>
-      <artifactId>zb-bom</artifactId>
+      <artifactId>zeebe-bom</artifactId>
       <version>${ZEEBE_VERSION}</version>
       <scope>import</scope>
       <type>pom</type>
@@ -39,7 +39,7 @@ Use the `ZeebeTestRule` in your test case to start an embedded broker and client
 
 ```java
 import io.zeebe.client.ZeebeClient;
-import io.zeebe.client.api.events.WorkflowInstanceEvent;
+import io.zeebe.client.api.response.WorkflowInstanceEvent;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;

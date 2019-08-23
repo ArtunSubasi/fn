@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.gateway;
 
@@ -19,13 +11,23 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import io.zeebe.gateway.ResponseMapper.BrokerResponseMapper;
+import io.zeebe.gateway.cmd.BrokerErrorException;
+import io.zeebe.gateway.cmd.BrokerRejectionException;
+import io.zeebe.gateway.cmd.ClientOutOfMemoryException;
+import io.zeebe.gateway.cmd.GrpcStatusException;
+import io.zeebe.gateway.cmd.GrpcStatusExceptionImpl;
 import io.zeebe.gateway.impl.broker.BrokerClient;
+import io.zeebe.gateway.impl.broker.cluster.BrokerClusterState;
 import io.zeebe.gateway.impl.broker.cluster.BrokerTopologyManager;
 import io.zeebe.gateway.impl.broker.request.BrokerRequest;
+import io.zeebe.gateway.impl.broker.response.BrokerError;
+import io.zeebe.gateway.impl.broker.response.BrokerRejection;
 import io.zeebe.gateway.impl.job.ActivateJobsHandler;
 import io.zeebe.gateway.protocol.GatewayGrpc;
 import io.zeebe.gateway.protocol.GatewayOuterClass.ActivateJobsRequest;
 import io.zeebe.gateway.protocol.GatewayOuterClass.ActivateJobsResponse;
+import io.zeebe.gateway.protocol.GatewayOuterClass.BrokerInfo;
+import io.zeebe.gateway.protocol.GatewayOuterClass.BrokerInfo.Builder;
 import io.zeebe.gateway.protocol.GatewayOuterClass.CancelWorkflowInstanceRequest;
 import io.zeebe.gateway.protocol.GatewayOuterClass.CancelWorkflowInstanceResponse;
 import io.zeebe.gateway.protocol.GatewayOuterClass.CompleteJobRequest;
@@ -36,20 +38,21 @@ import io.zeebe.gateway.protocol.GatewayOuterClass.DeployWorkflowRequest;
 import io.zeebe.gateway.protocol.GatewayOuterClass.DeployWorkflowResponse;
 import io.zeebe.gateway.protocol.GatewayOuterClass.FailJobRequest;
 import io.zeebe.gateway.protocol.GatewayOuterClass.FailJobResponse;
-import io.zeebe.gateway.protocol.GatewayOuterClass.GetWorkflowRequest;
-import io.zeebe.gateway.protocol.GatewayOuterClass.GetWorkflowResponse;
-import io.zeebe.gateway.protocol.GatewayOuterClass.ListWorkflowsRequest;
-import io.zeebe.gateway.protocol.GatewayOuterClass.ListWorkflowsResponse;
+import io.zeebe.gateway.protocol.GatewayOuterClass.Partition;
+import io.zeebe.gateway.protocol.GatewayOuterClass.Partition.PartitionBrokerRole;
 import io.zeebe.gateway.protocol.GatewayOuterClass.PublishMessageRequest;
 import io.zeebe.gateway.protocol.GatewayOuterClass.PublishMessageResponse;
 import io.zeebe.gateway.protocol.GatewayOuterClass.ResolveIncidentRequest;
 import io.zeebe.gateway.protocol.GatewayOuterClass.ResolveIncidentResponse;
+import io.zeebe.gateway.protocol.GatewayOuterClass.SetVariablesRequest;
+import io.zeebe.gateway.protocol.GatewayOuterClass.SetVariablesResponse;
 import io.zeebe.gateway.protocol.GatewayOuterClass.TopologyRequest;
 import io.zeebe.gateway.protocol.GatewayOuterClass.TopologyResponse;
 import io.zeebe.gateway.protocol.GatewayOuterClass.UpdateJobRetriesRequest;
 import io.zeebe.gateway.protocol.GatewayOuterClass.UpdateJobRetriesResponse;
-import io.zeebe.gateway.protocol.GatewayOuterClass.UpdateWorkflowInstancePayloadRequest;
-import io.zeebe.gateway.protocol.GatewayOuterClass.UpdateWorkflowInstancePayloadResponse;
+import io.zeebe.msgpack.MsgpackPropertyException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 
@@ -68,11 +71,72 @@ public class EndpointManager extends GatewayGrpc.GatewayImplBase {
   @Override
   public void topology(
       final TopologyRequest request, final StreamObserver<TopologyResponse> responseObserver) {
-    sendRequest(
-        request,
-        RequestMapper::toTopologyRequest,
-        ResponseMapper::toTopologyResponse,
-        responseObserver);
+    final TopologyResponse.Builder topologyResponseBuilder = TopologyResponse.newBuilder();
+    final BrokerClusterState topology = topologyManager.getTopology();
+
+    if (topology != null) {
+
+      topologyResponseBuilder
+          .setClusterSize(topology.getClusterSize())
+          .setPartitionsCount(topology.getPartitionsCount())
+          .setReplicationFactor(topology.getReplicationFactor());
+
+      final ArrayList<BrokerInfo> brokers = new ArrayList<>();
+
+      topology
+          .getBrokers()
+          .forEach(
+              brokerId -> {
+                final Builder brokerInfo = BrokerInfo.newBuilder();
+                addBrokerInfo(brokerInfo, brokerId, topology);
+                addPartitionInfoToBrokerInfo(brokerInfo, brokerId, topology);
+
+                brokers.add(brokerInfo.build());
+              });
+
+      topologyResponseBuilder.addAllBrokers(brokers);
+      final TopologyResponse response = topologyResponseBuilder.build();
+      responseObserver.onNext(response);
+      responseObserver.onCompleted();
+    } else {
+      final StatusRuntimeException error =
+          Status.UNAVAILABLE.augmentDescription("No brokers available").asRuntimeException();
+      responseObserver.onError(error);
+    }
+  }
+
+  private void addBrokerInfo(Builder brokerInfo, Integer brokerId, BrokerClusterState topology) {
+    final String[] addressParts = topology.getBrokerAddress(brokerId).split(":");
+
+    brokerInfo
+        .setNodeId(brokerId)
+        .setHost(addressParts[0])
+        .setPort(Integer.parseInt(addressParts[1]));
+  }
+
+  private void addPartitionInfoToBrokerInfo(
+      Builder brokerInfo, Integer brokerId, BrokerClusterState topology) {
+    topology
+        .getPartitions()
+        .forEach(
+            partitionId -> {
+              final Partition.Builder partitionBuilder = Partition.newBuilder();
+              partitionBuilder.setPartitionId(partitionId);
+
+              if (topology.getLeaderForPartition(partitionId) == brokerId) {
+                partitionBuilder.setRole(PartitionBrokerRole.LEADER);
+              } else {
+                final List<Integer> followersForPartition =
+                    topology.getFollowersForPartition(partitionId);
+
+                if (followersForPartition != null && followersForPartition.contains(brokerId)) {
+                  partitionBuilder.setRole(PartitionBrokerRole.FOLLOWER);
+                } else {
+                  return;
+                }
+              }
+              brokerInfo.addPartitions(partitionBuilder);
+            });
   }
 
   @Override
@@ -131,13 +195,12 @@ public class EndpointManager extends GatewayGrpc.GatewayImplBase {
   }
 
   @Override
-  public void updateWorkflowInstancePayload(
-      UpdateWorkflowInstancePayloadRequest request,
-      StreamObserver<UpdateWorkflowInstancePayloadResponse> responseObserver) {
+  public void setVariables(
+      SetVariablesRequest request, StreamObserver<SetVariablesResponse> responseObserver) {
     sendRequest(
         request,
-        RequestMapper::toUpdateWorkflowInstancePayloadRequest,
-        ResponseMapper::toUpdateWorkflowInstancePayloadResponse,
+        RequestMapper::toSetVariablesRequest,
+        ResponseMapper::toSetVariablesResponse,
         responseObserver);
   }
 
@@ -147,16 +210,6 @@ public class EndpointManager extends GatewayGrpc.GatewayImplBase {
         request,
         RequestMapper::toFailJobRequest,
         ResponseMapper::toFailJobResponse,
-        responseObserver);
-  }
-
-  @Override
-  public void listWorkflows(
-      ListWorkflowsRequest request, StreamObserver<ListWorkflowsResponse> responseObserver) {
-    sendRequest(
-        request,
-        RequestMapper::toListWorkflowsRequest,
-        ResponseMapper::toListWorkflowsResponse,
         responseObserver);
   }
 
@@ -171,22 +224,10 @@ public class EndpointManager extends GatewayGrpc.GatewayImplBase {
   }
 
   @Override
-  public void getWorkflow(
-      GetWorkflowRequest request, StreamObserver<GetWorkflowResponse> responseObserver) {
-    sendRequest(
-        request,
-        RequestMapper::toGetWorkflowRequest,
-        ResponseMapper::toGetWorkflowResponse,
-        responseObserver);
-  }
-
-  @Override
   public void activateJobs(
       ActivateJobsRequest request, StreamObserver<ActivateJobsResponse> responseObserver) {
-    topologyManager.withTopology(
-        topology ->
-            activateJobsHandler.activateJobs(
-                topology.getPartitionsCount(), request, responseObserver));
+    final BrokerClusterState topology = topologyManager.getTopology();
+    activateJobsHandler.activateJobs(topology.getPartitionsCount(), request, responseObserver);
   }
 
   @Override
@@ -208,6 +249,11 @@ public class EndpointManager extends GatewayGrpc.GatewayImplBase {
     final BrokerRequest<BrokerResponseT> brokerRequest;
     try {
       brokerRequest = requestMapper.apply(grpcRequest);
+    } catch (MsgpackPropertyException e) {
+      streamObserver.onError(
+          convertThrowable(
+              new GrpcStatusExceptionImpl(e.getMessage(), Status.INVALID_ARGUMENT, e)));
+      return;
     } catch (Exception e) {
       streamObserver.onError(convertThrowable(e));
       return;
@@ -223,15 +269,67 @@ public class EndpointManager extends GatewayGrpc.GatewayImplBase {
         error -> streamObserver.onError(convertThrowable(error)));
   }
 
-  private static StatusRuntimeException convertThrowable(final Throwable cause) {
-    final String description;
+  private StatusRuntimeException convertThrowable(Throwable cause) {
+    Status status = Status.INTERNAL;
 
     if (cause instanceof ExecutionException) {
-      description = cause.getCause().getMessage();
-    } else {
-      description = cause.getMessage();
+      return convertThrowable(cause.getCause());
     }
 
-    return Status.INTERNAL.augmentDescription(description).withCause(cause).asRuntimeException();
+    if (cause instanceof BrokerErrorException) {
+      status = mapBrokerErrorToStatus(((BrokerErrorException) cause).getError());
+    } else if (cause instanceof BrokerRejectionException) {
+      status = mapRejectionToStatus(((BrokerRejectionException) cause).getRejection());
+    } else if (cause instanceof ClientOutOfMemoryException) {
+      status = Status.UNAVAILABLE.augmentDescription(cause.getMessage());
+    } else if (cause instanceof GrpcStatusException) {
+      status = ((GrpcStatusException) cause).getGrpcStatus();
+    } else {
+      status = status.augmentDescription("Unexpected error occurred during the request processing");
+    }
+
+    final StatusRuntimeException convertedThrowable = status.withCause(cause).asRuntimeException();
+    Loggers.GATEWAY_LOGGER.error("Error handling gRPC request", convertedThrowable);
+
+    return convertedThrowable;
+  }
+
+  private Status mapBrokerErrorToStatus(BrokerError error) {
+    switch (error.getCode()) {
+      case WORKFLOW_NOT_FOUND:
+        return Status.NOT_FOUND.augmentDescription(error.getMessage());
+      default:
+        return Status.INTERNAL.augmentDescription(
+            String.format(
+                "Unexpected error occurred between gateway and broker (code: %s)",
+                error.getCode()));
+    }
+  }
+
+  private Status mapRejectionToStatus(BrokerRejection rejection) {
+    final String description =
+        String.format(
+            "Command rejected with code '%s': %s", rejection.getIntent(), rejection.getReason());
+    final Status status;
+
+    switch (rejection.getType()) {
+      case INVALID_ARGUMENT:
+        status = Status.INVALID_ARGUMENT;
+        break;
+      case NOT_FOUND:
+        status = Status.NOT_FOUND;
+        break;
+      case ALREADY_EXISTS:
+        status = Status.ALREADY_EXISTS;
+        break;
+      case INVALID_STATE:
+        status = Status.FAILED_PRECONDITION;
+        break;
+      default:
+        status = Status.UNKNOWN;
+        break;
+    }
+
+    return status.augmentDescription(description);
   }
 }

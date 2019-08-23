@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.broker.it.workflow;
 
@@ -19,11 +11,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.zeebe.broker.it.GrpcClientRule;
 import io.zeebe.broker.test.EmbeddedBrokerRule;
-import io.zeebe.client.api.commands.Workflow;
-import io.zeebe.client.api.events.DeploymentEvent;
-import io.zeebe.client.cmd.ClientException;
+import io.zeebe.client.api.command.ClientException;
+import io.zeebe.client.api.response.DeploymentEvent;
+import io.zeebe.client.api.response.Workflow;
 import io.zeebe.model.bpmn.Bpmn;
 import io.zeebe.model.bpmn.BpmnModelInstance;
+import io.zeebe.protocol.Protocol;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -58,7 +51,8 @@ public class CreateDeploymentTest {
     final Workflow deployedWorkflow = result.getWorkflows().get(0);
     assertThat(deployedWorkflow.getBpmnProcessId()).isEqualTo("process");
     assertThat(deployedWorkflow.getVersion()).isEqualTo(1);
-    assertThat(deployedWorkflow.getWorkflowKey()).isEqualTo(1L);
+    assertThat(deployedWorkflow.getWorkflowKey())
+        .isEqualTo(Protocol.encodePartitionId(Protocol.DEPLOYMENT_PARTITION, 1L));
     assertThat(deployedWorkflow.getResourceName()).isEqualTo("workflow.bpmn");
   }
 
@@ -66,7 +60,7 @@ public class CreateDeploymentTest {
   public void shouldNotDeployUnparsableModel() {
     // then
     exception.expect(ClientException.class);
-    exception.expectMessage("Failed to deploy resource 'invalid.bpmn'");
+    exception.expectMessage("'invalid.bpmn': SAXException while parsing input stream");
 
     // when
     clientRule

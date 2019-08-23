@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.protocol.impl.record.value.deployment;
 
@@ -19,13 +11,16 @@ import static io.zeebe.protocol.impl.record.value.workflowinstance.WorkflowInsta
 import static io.zeebe.protocol.impl.record.value.workflowinstance.WorkflowInstanceRecord.PROP_WORKFLOW_KEY;
 import static io.zeebe.protocol.impl.record.value.workflowinstance.WorkflowInstanceRecord.PROP_WORKFLOW_VERSION;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.zeebe.msgpack.UnpackedObject;
 import io.zeebe.msgpack.property.IntegerProperty;
 import io.zeebe.msgpack.property.LongProperty;
 import io.zeebe.msgpack.property.StringProperty;
+import io.zeebe.protocol.record.value.deployment.DeployedWorkflow;
+import io.zeebe.util.buffer.BufferUtil;
 import org.agrona.DirectBuffer;
 
-public class Workflow extends UnpackedObject {
+public class Workflow extends UnpackedObject implements DeployedWorkflow {
   private final StringProperty bpmnProcessIdProp =
       new StringProperty(PROP_WORKFLOW_BPMN_PROCESS_ID);
   private final IntegerProperty versionProp = new IntegerProperty(PROP_WORKFLOW_VERSION);
@@ -39,8 +34,55 @@ public class Workflow extends UnpackedObject {
         .declareProperty(resourceNameProp);
   }
 
-  public DirectBuffer getBpmnProcessId() {
+  @Override
+  public String getBpmnProcessId() {
+    return BufferUtil.bufferAsString(bpmnProcessIdProp.getValue());
+  }
+
+  public int getVersion() {
+    return versionProp.getValue();
+  }
+
+  @Override
+  public long getWorkflowKey() {
+    return getKey();
+  }
+
+  @JsonIgnore
+  public long getKey() {
+    return keyProp.getValue();
+  }
+
+  @Override
+  public String getResourceName() {
+    return BufferUtil.bufferAsString(resourceNameProp.getValue());
+  }
+
+  @JsonIgnore
+  public DirectBuffer getBpmnProcessIdBuffer() {
     return bpmnProcessIdProp.getValue();
+  }
+
+  @Override
+  @JsonIgnore
+  public int getEncodedLength() {
+    return super.getEncodedLength();
+  }
+
+  @Override
+  @JsonIgnore
+  public int getLength() {
+    return super.getLength();
+  }
+
+  @JsonIgnore
+  public DirectBuffer getResourceNameBuffer() {
+    return resourceNameProp.getValue();
+  }
+
+  public Workflow setBpmnProcessId(DirectBuffer bpmnProcessId, int offset, int length) {
+    this.bpmnProcessIdProp.setValue(bpmnProcessId, offset, length);
+    return this;
   }
 
   public Workflow setBpmnProcessId(String bpmnProcessId) {
@@ -53,31 +95,9 @@ public class Workflow extends UnpackedObject {
     return this;
   }
 
-  public Workflow setBpmnProcessId(DirectBuffer bpmnProcessId, int offset, int length) {
-    this.bpmnProcessIdProp.setValue(bpmnProcessId, offset, length);
-    return this;
-  }
-
-  public int getVersion() {
-    return versionProp.getValue();
-  }
-
-  public Workflow setVersion(int version) {
-    this.versionProp.setValue(version);
-    return this;
-  }
-
-  public long getKey() {
-    return keyProp.getValue();
-  }
-
   public Workflow setKey(long key) {
     this.keyProp.setValue(key);
     return this;
-  }
-
-  public DirectBuffer getResourceName() {
-    return resourceNameProp.getValue();
   }
 
   public Workflow setResourceName(String resourceName) {
@@ -87,6 +107,11 @@ public class Workflow extends UnpackedObject {
 
   public Workflow setResourceName(DirectBuffer resourceName) {
     this.resourceNameProp.setValue(resourceName);
+    return this;
+  }
+
+  public Workflow setVersion(int version) {
+    this.versionProp.setValue(version);
     return this;
   }
 }

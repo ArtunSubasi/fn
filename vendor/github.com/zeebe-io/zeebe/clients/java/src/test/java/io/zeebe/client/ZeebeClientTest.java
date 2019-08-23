@@ -38,12 +38,13 @@ public class ZeebeClientTest extends ClientTest {
 
       // then
       assertThat(configuration.getBrokerContactPoint()).isEqualTo("0.0.0.0:26500");
-      assertThat(configuration.getDefaultJobWorkerBufferSize()).isEqualTo(32);
+      assertThat(configuration.getDefaultJobWorkerMaxJobsActive()).isEqualTo(32);
       assertThat(configuration.getNumJobWorkerExecutionThreads()).isEqualTo(1);
       assertThat(configuration.getDefaultJobWorkerName()).isEqualTo("default");
       assertThat(configuration.getDefaultJobTimeout()).isEqualTo(Duration.ofMinutes(5));
       assertThat(configuration.getDefaultJobPollInterval()).isEqualTo(Duration.ofMillis(100));
       assertThat(configuration.getDefaultMessageTimeToLive()).isEqualTo(Duration.ofHours(1));
+      assertThat(configuration.getDefaultRequestTimeout()).isEqualTo(Duration.ofSeconds(20));
     }
   }
 }

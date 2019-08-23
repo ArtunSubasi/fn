@@ -1,48 +1,41 @@
 /*
- * Zeebe Broker Core
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.broker.system.configuration;
 
 import static io.zeebe.broker.system.configuration.EnvironmentConstants.ENV_HOST;
 import static io.zeebe.broker.system.configuration.EnvironmentConstants.ENV_PORT_OFFSET;
 
+import io.zeebe.broker.system.configuration.SocketBindingCfg.CommandApiCfg;
+import io.zeebe.broker.system.configuration.SocketBindingCfg.InternalApiCfg;
+import io.zeebe.broker.system.configuration.SocketBindingCfg.MonitoringApiCfg;
 import io.zeebe.util.Environment;
 
 public class NetworkCfg implements ConfigurationEntry {
 
   public static final String DEFAULT_HOST = "0.0.0.0";
+  public static final int DEFAULT_COMMAND_API_PORT = 26501;
+  public static final int DEFAULT_INTERNAL_API_PORT = 26502;
+  public static final int DEFAULT_MONITORING_API_PORT = 9600;
 
   private String host = DEFAULT_HOST;
-  private String defaultSendBufferSize = "16M";
   private int portOffset = 0;
 
-  private SocketBindingClientApiCfg client = new SocketBindingClientApiCfg();
-  private SocketBindingManagementCfg management = new SocketBindingManagementCfg();
-  private SocketBindingReplicationCfg replication = new SocketBindingReplicationCfg();
-  private SocketBindingSubscriptionCfg subscription = new SocketBindingSubscriptionCfg();
+  private CommandApiCfg commandApi = new CommandApiCfg();
+  private InternalApiCfg internalApi = new InternalApiCfg();
+  private MonitoringApiCfg monitoringApi = new MonitoringApiCfg();
 
   @Override
   public void init(
       final BrokerCfg brokerCfg, final String brokerBase, final Environment environment) {
     applyEnvironment(environment);
-    client.applyDefaults(this);
-    management.applyDefaults(this);
-    replication.applyDefaults(this);
-    subscription.applyDefaults(this);
+    commandApi.applyDefaults(this);
+    internalApi.applyDefaults(this);
+    monitoringApi.applyDefaults(this);
   }
 
   private void applyEnvironment(final Environment environment) {
@@ -58,14 +51,6 @@ public class NetworkCfg implements ConfigurationEntry {
     this.host = host;
   }
 
-  public String getDefaultSendBufferSize() {
-    return defaultSendBufferSize;
-  }
-
-  public void setDefaultSendBufferSize(final String defaultSendBufferSize) {
-    this.defaultSendBufferSize = defaultSendBufferSize;
-  }
-
   public int getPortOffset() {
     return portOffset;
   }
@@ -74,36 +59,28 @@ public class NetworkCfg implements ConfigurationEntry {
     this.portOffset = portOffset;
   }
 
-  public SocketBindingClientApiCfg getClient() {
-    return client;
+  public SocketBindingCfg getCommandApi() {
+    return commandApi;
   }
 
-  public void setClient(final SocketBindingClientApiCfg clientApi) {
-    this.client = clientApi;
+  public void setCommandApi(final CommandApiCfg commandApi) {
+    this.commandApi = commandApi;
   }
 
-  public SocketBindingManagementCfg getManagement() {
-    return management;
+  public SocketBindingCfg getMonitoringApi() {
+    return monitoringApi;
   }
 
-  public void setManagement(final SocketBindingManagementCfg managementApi) {
-    this.management = managementApi;
+  public void setMonitoringApi(MonitoringApiCfg monitoringApi) {
+    this.monitoringApi = monitoringApi;
   }
 
-  public SocketBindingReplicationCfg getReplication() {
-    return replication;
+  public SocketBindingCfg getInternalApi() {
+    return internalApi;
   }
 
-  public void setReplication(final SocketBindingReplicationCfg replicationApi) {
-    this.replication = replicationApi;
-  }
-
-  public SocketBindingSubscriptionCfg getSubscription() {
-    return subscription;
-  }
-
-  public void setSubscription(final SocketBindingSubscriptionCfg subscription) {
-    this.subscription = subscription;
+  public void setInternalApi(InternalApiCfg internalApi) {
+    this.internalApi = internalApi;
   }
 
   @Override
@@ -112,19 +89,14 @@ public class NetworkCfg implements ConfigurationEntry {
         + "host='"
         + host
         + '\''
-        + ", defaultSendBufferSize='"
-        + defaultSendBufferSize
-        + '\''
         + ", portOffset="
         + portOffset
-        + ", client="
-        + client
-        + ", management="
-        + management
-        + ", replication="
-        + replication
-        + ", subscription="
-        + subscription
+        + ", commandApi="
+        + commandApi
+        + ", internalApi="
+        + internalApi
+        + ", monitoringApi="
+        + monitoringApi
         + '}';
   }
 }

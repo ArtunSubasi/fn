@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.dispatcher;
 
@@ -39,7 +31,6 @@ import io.zeebe.dispatcher.impl.log.DataFrameDescriptor;
 import io.zeebe.dispatcher.impl.log.LogBuffer;
 import io.zeebe.dispatcher.impl.log.LogBufferPartition;
 import io.zeebe.util.allocation.AllocatedBuffer;
-import io.zeebe.util.metrics.Metric;
 import io.zeebe.util.sched.ActorCondition;
 import java.nio.ByteBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -63,11 +54,9 @@ public class SubscriptionPeekBlockTest {
   ByteBuffer rawBuffer;
   ByteBuffer rawBufferView;
   BlockPeek blockPeekSpy;
-  Dispatcher dispatcherMock;
 
   Subscription subscription;
   private ActorCondition dataConsumed;
-  private Metric metric;
 
   @Before
   public void setup() {
@@ -90,16 +79,9 @@ public class SubscriptionPeekBlockTest {
     when(logBuffer.createRawBufferView()).thenReturn(rawBufferView);
 
     dataConsumed = mock(ActorCondition.class);
-    metric = mock(Metric.class);
     subscription =
         new Subscription(
-            subscriberPositionMock,
-            mock(AtomicPosition.class),
-            0,
-            "0",
-            dataConsumed,
-            logBuffer,
-            metric);
+            subscriberPositionMock, mock(AtomicPosition.class), 0, "0", dataConsumed, logBuffer);
   }
 
   @Test
@@ -136,8 +118,7 @@ public class SubscriptionPeekBlockTest {
             A_FRAGMENT_LENGTH,
             A_PARTITION_ID,
             nextFragmentOffset(fragOffset),
-            1,
-            metric);
+            1);
     // and the position was not increased
     verifyNoMoreInteractions(subscriberPositionMock);
   }
@@ -251,8 +232,7 @@ public class SubscriptionPeekBlockTest {
             2 * A_FRAGMENT_LENGTH,
             A_PARTITION_ID,
             nextFragOffset,
-            2,
-            metric);
+            2);
     // and the position was increased by the fragment length of the two fragments
     verify(subscriberPositionMock).proposeMaxOrdered(position(A_PARTITION_ID, nextFragOffset));
   }
@@ -299,8 +279,7 @@ public class SubscriptionPeekBlockTest {
             A_FRAGMENT_LENGTH,
             A_PARTITION_ID,
             secondFragOffset,
-            1,
-            metric);
+            1);
     // and the position was increased by the fragment length of the one fragment
     verify(subscriberPositionMock).proposeMaxOrdered(position(A_PARTITION_ID, secondFragOffset));
   }
@@ -345,8 +324,7 @@ public class SubscriptionPeekBlockTest {
             A_FRAGMENT_LENGTH,
             A_PARTITION_ID,
             secondFragOffset,
-            2,
-            metric);
+            2);
   }
 
   @Test
@@ -390,8 +368,7 @@ public class SubscriptionPeekBlockTest {
             2 * A_FRAGMENT_LENGTH,
             A_PARTITION_ID,
             nextFragOffset,
-            2,
-            metric);
+            2);
   }
 
   @Test
@@ -464,8 +441,7 @@ public class SubscriptionPeekBlockTest {
             A_FRAGMENT_LENGTH,
             nextPartionId,
             nextFragOffset,
-            1,
-            metric);
+            1);
     // and the position was rolled over to the next partition
     verify(subscriberPositionMock)
         .proposeMaxOrdered(position(nextPartionId, nextFragOffset)); // is secondFragOffset somehow
@@ -540,8 +516,7 @@ public class SubscriptionPeekBlockTest {
             A_FRAGMENT_LENGTH,
             A_PARTITION_ID,
             nextFragOffset,
-            1,
-            metric);
+            1);
     // and the position was rolled over to the next fragement after the padding
     verify(subscriberPositionMock)
         .proposeMaxOrdered(position(A_PARTITION_ID, nextFragOffset)); // is secondFragOffset somehow
@@ -618,8 +593,7 @@ public class SubscriptionPeekBlockTest {
             2 * A_FRAGMENT_LENGTH,
             A_PARTITION_ID,
             nextFragOffset,
-            2,
-            metric);
+            2);
     // and the position was increased by the fragment length of the two fragments
     verify(subscriberPositionMock).proposeMaxOrdered(position(A_PARTITION_ID, nextFragOffset));
   }
@@ -706,8 +680,7 @@ public class SubscriptionPeekBlockTest {
             A_FRAGMENT_LENGTH,
             A_PARTITION_ID,
             secondFragOffset,
-            2,
-            metric);
+            2);
     // and the position was increased by the fragment length of the two fragments
     verify(subscriberPositionMock).proposeMaxOrdered(position(A_PARTITION_ID, secondFragOffset));
   }

@@ -16,6 +16,7 @@
 package io.zeebe.client.impl;
 
 import static io.zeebe.client.ClientProperties.DEFAULT_MESSAGE_TIME_TO_LIVE;
+import static io.zeebe.client.ClientProperties.DEFAULT_REQUEST_TIMEOUT;
 
 import io.zeebe.client.ClientProperties;
 import io.zeebe.client.ZeebeClient;
@@ -27,12 +28,13 @@ import java.util.Properties;
 public class ZeebeClientBuilderImpl implements ZeebeClientBuilder, ZeebeClientConfiguration {
 
   private String brokerContactPoint = "0.0.0.0:26500";
-  private int jobWorkerBufferSize = 32;
+  private int jobWorkerMaxJobsActive = 32;
   private int numJobWorkerExecutionThreads = 1;
   private String defaultJobWorkerName = "default";
   private Duration defaultJobTimeout = Duration.ofMinutes(5);
   private Duration defaultJobPollInterval = Duration.ofMillis(100);
   private Duration defaultMessageTimeToLive = Duration.ofHours(1);
+  private Duration defaultRequestTimeout = Duration.ofSeconds(20);
 
   @Override
   public String getBrokerContactPoint() {
@@ -46,13 +48,13 @@ public class ZeebeClientBuilderImpl implements ZeebeClientBuilder, ZeebeClientCo
   }
 
   @Override
-  public int getDefaultJobWorkerBufferSize() {
-    return jobWorkerBufferSize;
+  public int getDefaultJobWorkerMaxJobsActive() {
+    return jobWorkerMaxJobsActive;
   }
 
   @Override
-  public ZeebeClientBuilder defaultJobWorkerBufferSize(final int numberOfJobs) {
-    this.jobWorkerBufferSize = numberOfJobs;
+  public ZeebeClientBuilder defaultJobWorkerMaxJobsActive(final int maxJobsActive) {
+    this.jobWorkerMaxJobsActive = maxJobsActive;
     return this;
   }
 
@@ -112,6 +114,17 @@ public class ZeebeClientBuilderImpl implements ZeebeClientBuilder, ZeebeClientCo
   }
 
   @Override
+  public ZeebeClientBuilder defaultRequestTimeout(Duration requestTimeout) {
+    this.defaultRequestTimeout = requestTimeout;
+    return this;
+  }
+
+  @Override
+  public Duration getDefaultRequestTimeout() {
+    return defaultRequestTimeout;
+  }
+
+  @Override
   public ZeebeClient build() {
     return new ZeebeClientImpl(this);
   }
@@ -125,9 +138,9 @@ public class ZeebeClientBuilderImpl implements ZeebeClientBuilder, ZeebeClientCo
       numJobWorkerExecutionThreads(
           Integer.parseInt(properties.getProperty(ClientProperties.JOB_WORKER_EXECUTION_THREADS)));
     }
-    if (properties.containsKey(ClientProperties.JOB_WORKER_BUFFER_SIZE)) {
-      defaultJobWorkerBufferSize(
-          Integer.parseInt(properties.getProperty(ClientProperties.JOB_WORKER_BUFFER_SIZE)));
+    if (properties.containsKey(ClientProperties.JOB_WORKER_MAX_JOBS_ACTIVE)) {
+      defaultJobWorkerMaxJobsActive(
+          Integer.parseInt(properties.getProperty(ClientProperties.JOB_WORKER_MAX_JOBS_ACTIVE)));
     }
     if (properties.containsKey(ClientProperties.DEFAULT_JOB_WORKER_NAME)) {
       defaultJobWorkerName(properties.getProperty(ClientProperties.DEFAULT_JOB_WORKER_NAME));
@@ -147,6 +160,10 @@ public class ZeebeClientBuilderImpl implements ZeebeClientBuilder, ZeebeClientCo
       defaultMessageTimeToLive(
           Duration.ofMillis(Long.parseLong(properties.getProperty(DEFAULT_MESSAGE_TIME_TO_LIVE))));
     }
+    if (properties.containsKey(DEFAULT_REQUEST_TIMEOUT)) {
+      defaultRequestTimeout(
+          Duration.ofMillis(Long.parseLong(properties.getProperty(DEFAULT_REQUEST_TIMEOUT))));
+    }
 
     return this;
   }
@@ -156,12 +173,13 @@ public class ZeebeClientBuilderImpl implements ZeebeClientBuilder, ZeebeClientCo
     final StringBuilder sb = new StringBuilder();
 
     appendProperty(sb, "brokerContactPoint", brokerContactPoint);
-    appendProperty(sb, "jobWorkerBufferSize", jobWorkerBufferSize);
+    appendProperty(sb, "jobWorkerMaxJobsActive", jobWorkerMaxJobsActive);
     appendProperty(sb, "numJobWorkerExecutionThreads", numJobWorkerExecutionThreads);
     appendProperty(sb, "defaultJobWorkerName", defaultJobWorkerName);
     appendProperty(sb, "defaultJobTimeout", defaultJobTimeout);
     appendProperty(sb, "defaultJobPollInterval", defaultJobPollInterval);
     appendProperty(sb, "defaultMessageTimeToLive", defaultMessageTimeToLive);
+    appendProperty(sb, "defaultRequestTimeout", defaultRequestTimeout);
 
     return sb.toString();
   }

@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.gateway.api.job;
 
@@ -19,7 +11,8 @@ import io.zeebe.gateway.api.util.StubbedGateway;
 import io.zeebe.gateway.api.util.StubbedGateway.RequestStub;
 import io.zeebe.gateway.impl.broker.request.BrokerActivateJobsRequest;
 import io.zeebe.gateway.impl.broker.response.BrokerResponse;
-import io.zeebe.gateway.impl.data.MsgPackConverter;
+import io.zeebe.protocol.Protocol;
+import io.zeebe.protocol.impl.encoding.MsgPackConverter;
 import io.zeebe.protocol.impl.record.value.job.JobBatchRecord;
 import java.util.stream.LongStream;
 import org.agrona.DirectBuffer;
@@ -27,8 +20,6 @@ import org.agrona.concurrent.UnsafeBuffer;
 
 public class ActivateJobsStub
     implements RequestStub<BrokerActivateJobsRequest, BrokerResponse<JobBatchRecord>> {
-
-  private static final MsgPackConverter MSG_PACK_CONVERTER = new MsgPackConverter();
 
   public static final long JOB_BATCH_KEY = 123;
   public static final int RETRIES = 12;
@@ -42,12 +33,12 @@ public class ActivateJobsStub
   public static final long ELEMENT_INSTANCE_KEY = 459L;
 
   public static final String CUSTOM_HEADERS = "{\"foo\": 12, \"bar\": \"val\"}";
-  public static final String PAYLOAD = "{\"foo\": 13, \"bar\": \"world\"}";
+  public static final String VARIABLES = "{\"foo\": 13, \"bar\": \"world\"}";
 
   public static final DirectBuffer CUSTOM_HEADERS_MSGPACK =
-      new UnsafeBuffer(MSG_PACK_CONVERTER.convertToMsgPack(CUSTOM_HEADERS));
-  public static final DirectBuffer PAYLOAD_MSGPACK =
-      new UnsafeBuffer(MSG_PACK_CONVERTER.convertToMsgPack(PAYLOAD));
+      new UnsafeBuffer(MsgPackConverter.convertToMsgPack(CUSTOM_HEADERS));
+  public static final DirectBuffer VARIABLES_MSGPACK =
+      new UnsafeBuffer(MsgPackConverter.convertToMsgPack(VARIABLES));
 
   public long getJobBatchKey() {
     return JOB_BATCH_KEY;
@@ -65,8 +56,8 @@ public class ActivateJobsStub
     return CUSTOM_HEADERS;
   }
 
-  public String getPayload() {
-    return PAYLOAD;
+  public String getVariables() {
+    return VARIABLES;
   }
 
   public long getWorkflowInstanceKey() {
@@ -95,24 +86,36 @@ public class ActivateJobsStub
 
   @Override
   public BrokerResponse<JobBatchRecord> handle(BrokerActivateJobsRequest request) throws Exception {
+    final int partitionId = request.getPartitionId();
+
     final JobBatchRecord requestDto = request.getRequestWriter();
 
     final JobBatchRecord response = new JobBatchRecord();
-    response.setAmount(requestDto.getAmount());
-    response.setWorker(requestDto.getWorker());
-    response.setType(requestDto.getType());
+    response.setMaxJobsToActivate(requestDto.getMaxJobsToActivate());
+    response.setWorker(requestDto.getWorkerBuffer());
+    response.setType(requestDto.getTypeBuffer());
     response.setTimeout(requestDto.getTimeout());
-    addJobs(response, requestDto.getAmount(), requestDto.getType(), requestDto.getWorker());
+    addJobs(
+        response,
+        partitionId,
+        requestDto.getMaxJobsToActivate(),
+        requestDto.getTypeBuffer(),
+        requestDto.getWorkerBuffer());
 
-    return new BrokerResponse<>(response, 0, JOB_BATCH_KEY);
+    return new BrokerResponse<>(
+        response, partitionId, Protocol.encodePartitionId(partitionId, JOB_BATCH_KEY));
   }
 
   private void addJobs(
-      JobBatchRecord response, int amount, DirectBuffer type, DirectBuffer worker) {
+      JobBatchRecord response,
+      int partitionId,
+      int amount,
+      DirectBuffer type,
+      DirectBuffer worker) {
     LongStream.range(0, amount)
         .forEach(
             key -> {
-              response.jobKeys().add().setValue(key);
+              response.jobKeys().add().setValue(Protocol.encodePartitionId(partitionId, key));
               response
                   .jobs()
                   .add()
@@ -121,8 +124,7 @@ public class ActivateJobsStub
                   .setRetries(RETRIES)
                   .setDeadline(DEADLINE)
                   .setCustomHeaders(CUSTOM_HEADERS_MSGPACK)
-                  .setPayload(PAYLOAD_MSGPACK)
-                  .getHeaders()
+                  .setVariables(VARIABLES_MSGPACK)
                   .setWorkflowInstanceKey(WORKFLOW_INSTANCE_KEY)
                   .setBpmnProcessId(BPMN_PROCESS_ID)
                   .setWorkflowDefinitionVersion(WORKFLOW_DEFINITION_VERSION)

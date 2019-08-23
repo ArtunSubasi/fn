@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.transport;
 
@@ -20,6 +12,11 @@ import io.zeebe.transport.impl.TransportContext;
 import io.zeebe.transport.impl.actor.ActorContext;
 import io.zeebe.util.sched.future.ActorFuture;
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class ClientTransport implements AutoCloseable {
 
@@ -89,18 +86,23 @@ public class ClientTransport implements AutoCloseable {
     final RemoteAddress remoteAddress = getRemoteAddress(addr);
 
     if (remoteAddress == null) {
-      final Object monitor = new Object();
+      final Lock lock = new ReentrantLock();
+      final Condition connectionEstablished = lock.newCondition();
 
-      synchronized (monitor) {
+      lock.lock();
+      try {
         final TransportListener listener =
             new TransportListener() {
               @Override
               public void onConnectionEstablished(RemoteAddress remoteAddress) {
-                synchronized (monitor) {
+                lock.lock();
+                try {
                   if (remoteAddress.getAddress().equals(addr)) {
-                    monitor.notifyAll();
+                    connectionEstablished.signal();
                     removeChannelListener(this);
                   }
+                } finally {
+                  lock.unlock();
                 }
               }
 
@@ -112,10 +114,14 @@ public class ClientTransport implements AutoCloseable {
 
         registerEndpoint(nodeId, addr);
         try {
-          monitor.wait(Duration.ofSeconds(10).toMillis());
+          if (!connectionEstablished.await(10, TimeUnit.SECONDS)) {
+            throw new RuntimeException(new TimeoutException());
+          }
         } catch (InterruptedException e) {
           throw new RuntimeException(e);
         }
+      } finally {
+        lock.unlock();
       }
     }
   }

@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.util.sched;
 
@@ -20,12 +12,10 @@ import static org.agrona.UnsafeAccess.UNSAFE;
 import io.zeebe.util.Loggers;
 import io.zeebe.util.sched.future.ActorFuture;
 import io.zeebe.util.sched.future.CompletableActorFuture;
-import io.zeebe.util.sched.metrics.TaskMetrics;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Deque;
 import java.util.Queue;
-import java.util.concurrent.TimeUnit;
 import org.agrona.concurrent.ManyToOneConcurrentLinkedQueue;
 
 /**
@@ -108,12 +98,6 @@ public class ActorTask {
 
   boolean shouldYield;
 
-  private TaskMetrics taskMetrics;
-
-  private boolean isCollectTaskMetrics;
-
-  private boolean isJumbo = false;
-
   /**
    * the priority class of the task. Only set if the task is scheduled as non-blocking, CPU-bound
    */
@@ -125,7 +109,7 @@ public class ActorTask {
 
   /** called when the task is initially scheduled. */
   public ActorFuture<Void> onTaskScheduled(
-      ActorExecutor actorExecutor, ActorThreadGroup actorThreadGroup, TaskMetrics taskMetrics) {
+      ActorExecutor actorExecutor, ActorThreadGroup actorThreadGroup) {
     this.actorExecutor = actorExecutor;
     this.actorThreadGroup = actorThreadGroup;
     // reset previous state to allow re-scheduling
@@ -141,13 +125,9 @@ public class ActorTask {
     jobStartingTaskFuture.close();
     jobStartingTaskFuture.setAwaitingResult();
 
-    this.isJumbo = false;
     this.submittedJobs = new ManyToOneConcurrentLinkedQueue<>();
     this.fastLaneJobs = new ArrayDeque<>();
     this.lifecyclePhase = ActorLifecyclePhase.STARTING;
-
-    this.isCollectTaskMetrics = taskMetrics != null;
-    this.taskMetrics = taskMetrics;
 
     // create initial job to invoke on start callback
     final ActorJob j = new ActorJob();
@@ -166,16 +146,18 @@ public class ActorTask {
     final Queue<ActorJob> submittedJobs = this.submittedJobs;
 
     // add job to queue
-    submittedJobs.offer(job);
-
-    if (submittedJobs != this.submittedJobs) {
-      // jobs queue was replaced (see onClosed method)
-      // in case the job was offer after the original queue was drained
-      // we have to manually fail the job to make sure does not get lost
-      failJob(job);
+    if (submittedJobs.offer(job)) {
+      if (submittedJobs != this.submittedJobs) {
+        // jobs queue was replaced (see onClosed method)
+        // in case the job was offer after the original queue was drained
+        // we have to manually fail the job to make sure does not get lost
+        failJob(job);
+      } else {
+        // wakeup task if waiting
+        tryWakeup();
+      }
     } else {
-      // wakeup task if waiting
-      tryWakeup();
+      job.failFuture("Was not able to submit job to the actors queue.");
     }
   }
 
@@ -321,10 +303,6 @@ public class ActorTask {
       // cancel and discard jobs
       failJob(j);
     }
-
-    if (taskMetrics != null) {
-      taskMetrics.close();
-    }
   }
 
   private void failJob(ActorJob job) {
@@ -345,7 +323,7 @@ public class ActorTask {
     }
   }
 
-  public void onFailure(Exception failure) {
+  public void onFailure(Throwable failure) {
     switch (lifecyclePhase) {
       case STARTING:
         Loggers.ACTOR_LOGGER.error(
@@ -524,34 +502,6 @@ public class ActorTask {
 
   public void yield() {
     shouldYield = true;
-  }
-
-  public TaskMetrics getMetrics() {
-    return taskMetrics;
-  }
-
-  public boolean isCollectTaskMetrics() {
-    return isCollectTaskMetrics;
-  }
-
-  public void reportExecutionTime(long t) {
-    taskMetrics.reportExecutionTime(t);
-  }
-
-  public void warnMaxTaskExecutionTimeExceeded(long taskExecutionTime) {
-    if (!isJumbo) {
-      isJumbo = true;
-
-      System.err.println(
-          String.format(
-              "%s reported running for %dµs. Jumbo task detected! "
-                  + "Will not print further warnings for this task.",
-              actor.getName(), TimeUnit.NANOSECONDS.toMicros(taskExecutionTime)));
-    }
-  }
-
-  public boolean isHasWarnedJumbo() {
-    return isJumbo;
   }
 
   public long getStateCount() {

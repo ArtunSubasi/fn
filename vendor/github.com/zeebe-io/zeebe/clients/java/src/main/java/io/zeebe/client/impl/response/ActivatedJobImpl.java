@@ -17,10 +17,8 @@ package io.zeebe.client.impl.response;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.zeebe.client.api.response.ActivatedJob;
-import io.zeebe.client.api.response.JobHeaders;
 import io.zeebe.client.impl.ZeebeObjectMapper;
 import io.zeebe.gateway.protocol.GatewayOuterClass;
-import java.time.Instant;
 import java.util.Map;
 
 public class ActivatedJobImpl implements ActivatedJob {
@@ -29,24 +27,64 @@ public class ActivatedJobImpl implements ActivatedJob {
 
   private final long key;
   private final String type;
-  private final JobHeaders headers;
-  private final Map<String, Object> customHeaders;
+  private final Map<String, String> customHeaders;
+  private final long workflowInstanceKey;
+  private final String bpmnProcessId;
+  private final int workflowDefinitionVersion;
+  private final long workflowKey;
+  private final String elementId;
+  private final long elementInstanceKey;
   private final String worker;
   private final int retries;
-  private final Instant deadline;
-  private final String payload;
+  private final long deadline;
+  private final String variables;
 
   public ActivatedJobImpl(ZeebeObjectMapper objectMapper, GatewayOuterClass.ActivatedJob job) {
     this.objectMapper = objectMapper;
 
     key = job.getKey();
     type = job.getType();
-    headers = new JobHeadersImpl(job.getJobHeaders());
-    customHeaders = objectMapper.fromJsonAsMap(job.getCustomHeaders());
+    customHeaders = objectMapper.fromJsonAsStringMap(job.getCustomHeaders());
     worker = job.getWorker();
     retries = job.getRetries();
-    deadline = Instant.ofEpochMilli(job.getDeadline());
-    payload = job.getPayload();
+    deadline = job.getDeadline();
+    variables = job.getVariables();
+    workflowInstanceKey = job.getWorkflowInstanceKey();
+    bpmnProcessId = job.getBpmnProcessId();
+    workflowDefinitionVersion = job.getWorkflowDefinitionVersion();
+    workflowKey = job.getWorkflowKey();
+    elementId = job.getElementId();
+    elementInstanceKey = job.getElementInstanceKey();
+  }
+
+  @Override
+  public long getWorkflowInstanceKey() {
+    return workflowInstanceKey;
+  }
+
+  @Override
+  public String getBpmnProcessId() {
+    return bpmnProcessId;
+  }
+
+  @Override
+  public int getWorkflowDefinitionVersion() {
+    return workflowDefinitionVersion;
+  }
+
+  @Override
+  public long getWorkflowKey() {
+    return workflowKey;
+  }
+
+  @Override
+  public String getElementId() {
+    return elementId;
+  }
+
+  @Override
+  public long getElementInstanceKey() {
+    return elementInstanceKey;
   }
 
   @Override
@@ -60,12 +98,7 @@ public class ActivatedJobImpl implements ActivatedJob {
   }
 
   @Override
-  public JobHeaders getHeaders() {
-    return headers;
-  }
-
-  @Override
-  public Map<String, Object> getCustomHeaders() {
+  public Map<String, String> getCustomHeaders() {
     return customHeaders;
   }
 
@@ -80,27 +113,32 @@ public class ActivatedJobImpl implements ActivatedJob {
   }
 
   @Override
-  public Instant getDeadline() {
+  public long getDeadline() {
     return deadline;
   }
 
   @Override
-  public String getPayload() {
-    return payload;
+  public String getVariables() {
+    return variables;
   }
 
   @Override
-  public Map<String, Object> getPayloadAsMap() {
-    return objectMapper.fromJsonAsMap(payload);
+  public Map<String, Object> getVariablesAsMap() {
+    return objectMapper.fromJsonAsMap(variables);
   }
 
   @Override
-  public <T> T getPayloadAsType(Class<T> payloadType) {
-    return objectMapper.fromJson(payload, payloadType);
+  public <T> T getVariablesAsType(Class<T> variableType) {
+    return objectMapper.fromJson(variables, variableType);
   }
 
   @Override
   public String toJson() {
     return objectMapper.toJson(this);
+  }
+
+  @Override
+  public String toString() {
+    return toJson();
   }
 }

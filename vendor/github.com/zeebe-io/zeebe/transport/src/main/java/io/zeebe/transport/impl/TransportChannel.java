@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.transport.impl;
 
@@ -21,8 +13,6 @@ import io.zeebe.transport.Loggers;
 import io.zeebe.util.ZbLogger;
 import io.zeebe.util.allocation.AllocatedBuffer;
 import io.zeebe.util.allocation.BufferAllocators;
-import io.zeebe.util.metrics.Metric;
-import io.zeebe.util.metrics.MetricsManager;
 import java.io.IOException;
 import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
@@ -51,7 +41,6 @@ public class TransportChannel {
   @SuppressWarnings("unused") // used through STATE_FIELD
   private volatile int state = CLOSED;
 
-  private final TransportChannelMetrics metrics;
   private final RemoteAddressImpl remoteAddress;
   private final AllocatedBuffer allocatedBuffer;
   private final ByteBuffer channelReadBuffer;
@@ -70,12 +59,10 @@ public class TransportChannel {
       ChannelLifecycleListener listener,
       RemoteAddressImpl remoteAddress,
       int maxMessageSize,
-      FragmentHandler readHandler,
-      TransportChannelMetrics metrics) {
+      FragmentHandler readHandler) {
     this.listener = listener;
     this.remoteAddress = remoteAddress;
     this.readHandler = readHandler;
-    this.metrics = metrics;
     this.allocatedBuffer = BufferAllocators.allocateDirect(2 * maxMessageSize);
     this.channelReadBuffer = allocatedBuffer.getRawBuffer();
     this.channelReadBufferView = new UnsafeBuffer(channelReadBuffer);
@@ -86,9 +73,8 @@ public class TransportChannel {
       RemoteAddressImpl remoteAddress,
       int maxMessageSize,
       FragmentHandler readHandler,
-      SocketChannel media,
-      TransportChannelMetrics metrics) {
-    this(listener, remoteAddress, maxMessageSize, readHandler, metrics);
+      SocketChannel media) {
+    this(listener, remoteAddress, maxMessageSize, readHandler);
     this.media = media;
     STATE_FIELD.set(this, CONNECTED);
   }
@@ -104,8 +90,6 @@ public class TransportChannel {
       doClose();
       return workCount;
     }
-
-    metrics.receiveBytes.getAndAddOrdered(received);
 
     final int available = channelReadBuffer.position();
 
@@ -175,7 +159,6 @@ public class TransportChannel {
 
     try {
       bytesWritten = media.write(buffer);
-      metrics.transmitBytes.getAndAddOrdered(bytesWritten);
     } catch (IOException e) {
       doClose();
     }
@@ -306,30 +289,5 @@ public class TransportChannel {
   @Override
   public String toString() {
     return media != null ? media.toString() : "unconnected channel to remote " + remoteAddress;
-  }
-
-  public static class TransportChannelMetrics {
-    final Metric receiveBytes;
-    final Metric transmitBytes;
-
-    public TransportChannelMetrics(MetricsManager metricsManager, String transportName) {
-      receiveBytes =
-          metricsManager
-              .newMetric("transport_receive_bytes")
-              .type("counter")
-              .label("transport", transportName)
-              .create();
-      transmitBytes =
-          metricsManager
-              .newMetric("transport_transmit_bytes")
-              .type("counter")
-              .label("transport", transportName)
-              .create();
-    }
-
-    public void close() {
-      receiveBytes.close();
-      transmitBytes.close();
-    }
   }
 }

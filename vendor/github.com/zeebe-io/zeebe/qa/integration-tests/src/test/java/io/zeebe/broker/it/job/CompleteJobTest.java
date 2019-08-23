@@ -1,32 +1,26 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.broker.it.job;
 
+import static io.zeebe.broker.it.util.StatusCodeMatcher.hasStatusCode;
+import static io.zeebe.broker.it.util.StatusDescriptionMatcher.descriptionContains;
 import static io.zeebe.test.util.TestUtil.waitUntil;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.entry;
 
+import io.grpc.Status.Code;
 import io.zeebe.broker.it.GrpcClientRule;
 import io.zeebe.broker.it.util.RecordingJobHandler;
 import io.zeebe.broker.it.util.ZeebeAssertHelper;
 import io.zeebe.broker.test.EmbeddedBrokerRule;
-import io.zeebe.client.api.clients.JobClient;
+import io.zeebe.client.api.command.ClientStatusException;
 import io.zeebe.client.api.response.ActivatedJob;
-import io.zeebe.client.cmd.ClientException;
+import io.zeebe.client.api.worker.JobClient;
 import java.util.Collections;
 import org.junit.Before;
 import org.junit.Rule;
@@ -62,94 +56,72 @@ public class CompleteJobTest {
   }
 
   @Test
-  public void shouldCompleteJobWithoutPayload() {
+  public void shouldCompleteJobWithoutVariables() {
     // when
     clientRule.getClient().newCompleteCommand(jobKey).send().join();
 
     // then
-    ZeebeAssertHelper.assertJobCompleted(
-        "test",
-        (job) -> {
-          assertThat(job.getPayload()).isEqualTo("{}");
-          assertThat(job.getPayloadAsMap()).isEmpty();
-        });
+    ZeebeAssertHelper.assertJobCompleted("test", (job) -> assertThat(job.getVariables()).isEmpty());
   }
 
   @Test
-  public void shouldCompleteJobNullPayload() {
+  public void shouldCompleteJobNullVariables() {
     // when
-    clientRule.getClient().newCompleteCommand(jobKey).payload("null").send().join();
+    clientRule.getClient().newCompleteCommand(jobKey).variables("null").send().join();
+
+    // then
+    ZeebeAssertHelper.assertJobCompleted("test", (job) -> assertThat(job.getVariables()).isEmpty());
+  }
+
+  @Test
+  public void shouldCompleteJobWithVariables() {
+    // when
+    clientRule.getClient().newCompleteCommand(jobKey).variables("{\"foo\":\"bar\"}").send().join();
 
     // then
     ZeebeAssertHelper.assertJobCompleted(
-        "test",
-        (job) -> {
-          assertThat(job.getPayload()).isEqualTo("{}");
-          assertThat(job.getPayloadAsMap()).isEmpty();
-        });
+        "test", (job) -> assertThat(job.getVariables()).containsOnly(entry("foo", "bar")));
   }
 
   @Test
-  public void shouldCompleteJobWithPayload() {
+  public void shouldThrowExceptionOnCompleteJobWithInvalidVariables() {
+    // expect
+    thrown.expect(ClientStatusException.class);
+    thrown.expect(hasStatusCode(Code.INVALID_ARGUMENT));
+    thrown.expect(
+        descriptionContains(
+            "Property 'variables' is invalid: Expected document to be a root level object, but was 'ARRAY'"));
+
     // when
-    clientRule.getClient().newCompleteCommand(jobKey).payload("{\"foo\":\"bar\"}").send().join();
-
-    // then
-    ZeebeAssertHelper.assertJobCompleted(
-        "test",
-        (job) -> {
-          assertThat(job.getPayload()).isEqualTo("{\"foo\":\"bar\"}");
-          assertThat(job.getPayloadAsMap()).containsOnly(entry("foo", "bar"));
-        });
+    clientRule.getClient().newCompleteCommand(jobKey).variables("[]").send().join();
   }
 
   @Test
-  public void shouldThrowExceptionOnCompleteJobWithInvalidPayload() {
-    // when
-    final Throwable throwable =
-        catchThrowable(
-            () -> clientRule.getClient().newCompleteCommand(jobKey).payload("[]").send().join());
-
-    // then
-    assertThat(throwable).isInstanceOf(ClientException.class);
-    assertThat(throwable.getMessage())
-        .contains("Document has invalid format. On root level an object is only allowed.");
-  }
-
-  @Test
-  public void shouldCompleteJobWithPayloadAsMap() {
+  public void shouldCompleteJobWithVariablesAsMap() {
     // when
     clientRule
         .getClient()
         .newCompleteCommand(jobKey)
-        .payload(Collections.singletonMap("foo", "bar"))
+        .variables(Collections.singletonMap("foo", "bar"))
         .send()
         .join();
 
     // then
     ZeebeAssertHelper.assertJobCompleted(
-        "test",
-        (job) -> {
-          assertThat(job.getPayload()).isEqualTo("{\"foo\":\"bar\"}");
-          assertThat(job.getPayloadAsMap()).containsOnly(entry("foo", "bar"));
-        });
+        "test", (job) -> assertThat(job.getVariables()).containsOnly(entry("foo", "bar")));
   }
 
   @Test
-  public void shouldCompleteJobWithPayloadAsObject() {
-    final PayloadObject payload = new PayloadObject();
-    payload.foo = "bar";
+  public void shouldCompleteJobWithVariablesAsObject() {
+    final VariablesObject variables = new VariablesObject();
+    variables.foo = "bar";
 
     // when
-    clientRule.getClient().newCompleteCommand(jobKey).payload(payload).send().join();
+    clientRule.getClient().newCompleteCommand(jobKey).variables(variables).send().join();
 
     // then
     ZeebeAssertHelper.assertJobCompleted(
-        "test",
-        (job) -> {
-          assertThat(job.getPayload()).isEqualTo("{\"foo\":\"bar\"}");
-          assertThat(job.getPayloadAsMap()).containsOnly(entry("foo", "bar"));
-        });
+        "test", (job) -> assertThat(job.getVariables()).containsOnly(entry("foo", "bar")));
   }
 
   @Test
@@ -159,19 +131,15 @@ public class CompleteJobTest {
     final long jobKey = clientRule.createSingleJob("bar");
     jobClient.newCompleteCommand(jobKey).send().join();
 
-    // then
-    thrown.expect(ClientException.class);
-    thrown.expectMessage(
-        "Command (COMPLETE) for event with key "
-            + jobKey
-            + " was rejected. It is not applicable in the current state. "
-            + "Job does not exist");
+    // expect
+    thrown.expect(ClientStatusException.class);
+    thrown.expect(hasStatusCode(Code.NOT_FOUND));
 
     // when
     jobClient.newCompleteCommand(jobKey).send().join();
   }
 
-  public static class PayloadObject {
+  public static class VariablesObject {
     public String foo;
   }
 }

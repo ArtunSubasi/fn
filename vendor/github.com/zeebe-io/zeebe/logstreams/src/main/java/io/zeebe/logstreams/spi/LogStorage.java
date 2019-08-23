@@ -1,20 +1,13 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.logstreams.spi;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /** Log structured storage abstraction */
@@ -61,15 +54,18 @@ public interface LogStorage {
    *
    * @param blockBuffer the buffer containing a block of log entries to be written into storage
    * @return the address at which the block has been written or error status code
+   * @throws IOException on I/O error during the append operation
+   * @throws IllegalArgumentException when block size is to large
+   * @throws IllegalStateException when logstorage was not opened and not initialized
    */
-  long append(ByteBuffer blockBuffer);
+  long append(ByteBuffer blockBuffer) throws IOException;
 
   /**
-   * Truncates the log up to the given address.
+   * Deletes from the log storage, uses the given address as upper limit.
    *
-   * @param address The address at which to truncate the log.
+   * @param address the address until we try to delete
    */
-  void truncate(long address);
+  void delete(long address);
 
   /**
    * Naive implementation of the {@link #read(ByteBuffer, long, ReadResultProcessor)} method. Does
@@ -129,8 +125,12 @@ public interface LogStorage {
    */
   boolean isByteAddressable();
 
-  /** Open the storage. Called in the log conductor thread. */
-  void open();
+  /**
+   * Open the storage. Called in the log conductor thread.
+   *
+   * @throws IOException on I/O errors during allocating the first segments
+   */
+  void open() throws IOException;
 
   /** Close the storage. Called in the log conductor thread. */
   void close();

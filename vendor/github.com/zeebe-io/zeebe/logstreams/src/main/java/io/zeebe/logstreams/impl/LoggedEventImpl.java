@@ -1,35 +1,25 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.logstreams.impl;
 
-import static io.zeebe.dispatcher.impl.log.DataFrameDescriptor.lengthOffset;
-import static io.zeebe.dispatcher.impl.log.DataFrameDescriptor.messageLength;
-import static io.zeebe.dispatcher.impl.log.DataFrameDescriptor.messageOffset;
-import static io.zeebe.dispatcher.impl.log.DataFrameDescriptor.streamIdOffset;
-import static io.zeebe.dispatcher.impl.log.DataFrameDescriptor.typeOffset;
-import static io.zeebe.dispatcher.impl.log.DataFrameDescriptor.versionOffset;
+import static io.zeebe.dispatcher.impl.log.DataFrameDescriptor.*;
 import static io.zeebe.logstreams.impl.LogEntryDescriptor.headerLength;
 
 import io.zeebe.logstreams.log.LoggedEvent;
 import io.zeebe.protocol.Protocol;
+import io.zeebe.protocol.record.VarDataEncodingEncoder;
 import io.zeebe.util.buffer.BufferReader;
 import org.agrona.DirectBuffer;
+import org.agrona.MutableDirectBuffer;
 
 /** Represents the implementation of the logged event. */
 public class LoggedEventImpl implements ReadableFragment, LoggedEvent {
+
   protected int fragmentOffset = -1;
   protected int messageOffset = -1;
   protected DirectBuffer buffer;
@@ -84,11 +74,6 @@ public class LoggedEventImpl implements ReadableFragment, LoggedEvent {
   }
 
   @Override
-  public int getRaftTerm() {
-    return LogEntryDescriptor.getRaftTerm(buffer, messageOffset);
-  }
-
-  @Override
   public long getKey() {
     return LogEntryDescriptor.getKey(buffer, messageOffset);
   }
@@ -106,6 +91,12 @@ public class LoggedEventImpl implements ReadableFragment, LoggedEvent {
   @Override
   public short getMetadataLength() {
     return LogEntryDescriptor.getMetadataLength(buffer, messageOffset);
+  }
+
+  @Override
+  public int getMaxValueLength() {
+    return VarDataEncodingEncoder.lengthMaxValue()
+        - LogEntryDescriptor.headerLength(getMetadataLength());
   }
 
   @Override
@@ -147,11 +138,6 @@ public class LoggedEventImpl implements ReadableFragment, LoggedEvent {
   }
 
   @Override
-  public int getProducerId() {
-    return LogEntryDescriptor.getProducerId(buffer, messageOffset);
-  }
-
-  @Override
   public String toString() {
     return "LoggedEvent [type="
         + getType()
@@ -167,8 +153,16 @@ public class LoggedEventImpl implements ReadableFragment, LoggedEvent {
         + getTimestamp()
         + ", sourceEventPosition="
         + getSourceEventPosition()
-        + ", producerId="
-        + getProducerId()
         + "]";
+  }
+
+  @Override
+  public int getLength() {
+    return getFragmentLength();
+  }
+
+  @Override
+  public void write(MutableDirectBuffer destination, int offset) {
+    destination.putBytes(offset, buffer, fragmentOffset, getLength());
   }
 }

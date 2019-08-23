@@ -1,19 +1,9 @@
 /*
- * Zeebe Broker Core
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.broker.exporter;
 
@@ -25,7 +15,6 @@ import com.fasterxml.jackson.databind.InjectableValues;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import io.zeebe.gateway.impl.data.MsgPackConverter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
@@ -35,15 +24,13 @@ public class ExporterObjectMapper {
 
   private static final TypeReference<Map<String, Object>> MAP_TYPE_REFERENCE =
       new TypeReference<Map<String, Object>>() {};
+  private static final TypeReference<Map<String, Object>> STRING_MAP_TYPE_REFERENCE =
+      new TypeReference<Map<String, Object>>() {};
 
   private final ObjectMapper msgpackObjectMapper;
   private final ObjectMapper jsonObjectMapper;
 
-  private final MsgPackConverter msgPackConverter;
-
   public ExporterObjectMapper() {
-    this.msgPackConverter = new MsgPackConverter();
-
     final InjectableValues.Std injectableValues = new InjectableValues.Std();
     injectableValues.addValue(ExporterObjectMapper.class, this);
 
@@ -77,10 +64,6 @@ public class ExporterObjectMapper {
     return objectMapper;
   }
 
-  public MsgPackConverter getMsgPackConverter() {
-    return msgPackConverter;
-  }
-
   public String toJson(Object value) {
     try {
       return jsonObjectMapper.writeValueAsString(value);
@@ -110,6 +93,14 @@ public class ExporterObjectMapper {
   public Map<String, Object> fromMsgpackAsMap(InputStream inputStream) {
     try {
       return msgpackObjectMapper.readValue(inputStream, MAP_TYPE_REFERENCE);
+    } catch (IOException e) {
+      throw new RuntimeException("Failed deserialize Msgpack JSON to map", e);
+    }
+  }
+
+  public Map<String, String> fromMsgpackAsStringMap(InputStream inputStream) {
+    try {
+      return msgpackObjectMapper.readValue(inputStream, STRING_MAP_TYPE_REFERENCE);
     } catch (IOException e) {
       throw new RuntimeException("Failed deserialize Msgpack JSON to map", e);
     }

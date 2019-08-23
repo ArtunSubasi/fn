@@ -13,18 +13,33 @@ You will be guided through the following steps:
 
 > You can find the complete source code, including the BPMN diagrams, on [GitHub](https://github.com/zeebe-io/zeebe-get-started-java-client).
 
+> You can watch a video walk-through of this guide on the [Zeebe YouTube channel here](https://www.youtube.com/watch?v=RV9_7Ct2j0g).
+
 ## Prerequisites
 
 * Java 8
 * [Apache Maven](https://maven.apache.org/)
-* [Zeebe distribution](../introduction/install.html)
 * [Zeebe Modeler](https://github.com/zeebe-io/zeebe-modeler/releases)
+
+One of the following:
+
+(Using Docker)
+* [Docker](http://www.docker.com)
+* [Zeebe Docker Configurations](https://github.com/zeebe-io/zeebe-docker-compose)
+
+(Not using Docker)
+* [Zeebe distribution](../introduction/install.html)
 * [Zeebe Monitor](https://github.com/zeebe-io/zeebe-simple-monitor/releases)
 
-Before you begin to setup your project please start the broker, i.e. by running the start up script 
-`bin/broker` or `bin/broker.bat` in the distribution. Per default the broker is binding to the 
-address `localhost:26500`, which is used as contact point in this guide. In case your broker is 
-available under another address please adjust the broker contact point when building the client.
+## Start the broker
+
+Before you begin to setup your project, please start the broker.
+
+If you are using Docker with [zeebe-docker-compose], then change into the `simple-monitor` subdirectory, and run `docker-compose up`.
+
+If you are not using Docker, run the start up script `bin/broker` or `bin/broker.bat` in the distribution.
+
+By default, the broker binds to `localhost:26500`, which is used as contact point in this guide.
 
 ## Set up a project
 
@@ -32,10 +47,10 @@ First, we need a Maven project.
 Create a new project using your IDE, or run the Maven command:
 
 ```
-mvn archetype:generate
-    -DgroupId=io.zeebe
-    -DartifactId=zeebe-get-started-java-client
-    -DarchetypeArtifactId=maven-archetype-quickstart
+mvn archetype:generate \
+    -DgroupId=io.zeebe \
+    -DartifactId=zeebe-get-started-java-client \
+    -DarchetypeArtifactId=maven-archetype-quickstart \
     -DinteractiveMode=false
 ```
 
@@ -54,11 +69,9 @@ Create a main class and add the following lines to bootstrap the Zeebe client:
 ```java
 package io.zeebe;
 
-import java.util.Properties;
-import io.zeebe.client.ClientProperties;
 import io.zeebe.client.ZeebeClient;
 
-public class Application
+public class App
 {
     public static void main(String[] args)
     {
@@ -77,10 +90,43 @@ public class Application
 }
 ```
 
-Run the program.
-If you use an IDE, you can just execute the main class.
-Otherwise, you must build an executable JAR file with Maven and execute it.
-(See the GitHub repository on how to do this.)
+Run the program:
+* If you use an IDE, you can just execute the main class, using your IDE.
+* Otherwise, you must build an executable JAR file with Maven and execute it.
+
+## Interlude: Build an executable JAR file
+
+Add the Maven Shade plugin to your pom.xml:
+
+```xml
+<!-- Maven Shade Plugin -->
+<plugin>
+  <groupId>org.apache.maven.plugins</groupId>
+  <artifactId>maven-shade-plugin</artifactId>
+  <version>2.3</version>
+  <executions>
+    <!-- Run shade goal on package phase -->
+    <execution>
+      <phase>package</phase>
+      <goals>
+        <goal>shade</goal>
+      </goals>
+      <configuration>
+        <transformers>
+          <!-- add Main-Class to manifest file -->
+          <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+            <mainClass>io.zeebe.App</mainClass>
+          </transformer>
+        </transformers>
+      </configuration>
+    </execution>
+  </executions>
+</plugin>
+```
+
+Now run `mvn package`, and it will generate a JAR file in the `target` subdirectory. You can run this with `java -jar target/${JAR file}`.
+
+## Output of executing program
 
 You should see the output:
 
@@ -100,20 +146,22 @@ Add a start event and an end event to the diagram and connect the events.
 
 ![model-workflow-step-1](/java-client/order-process-simple.png)
 
-Set the id (i.e., the BPMN process id) and mark the diagram as executable.
-Save the diagram in the project's source folder.
+Set the id (the BPMN process id), and mark the diagram as executable.
+
+Save the diagram as `src/main/resources/order-process.bpmn` under the project's folder.
 
 ## Deploy a workflow
 
 Next, we want to deploy the modeled workflow to the broker.
-The broker stores the workflow under its BPMN process id and assigns a version (i.e., the revision).
+
+The broker stores the workflow under its BPMN process id and assigns a version.
 
 Add the following deploy command to the main class:
 
 ```java
 package io.zeebe;
 
-import io.zeebe.client.api.events.DeploymentEvent;
+import io.zeebe.client.api.response.DeploymentEvent;
 
 public class Application
 {
@@ -151,7 +199,7 @@ Add the following create command to the main class:
 ```java
 package io.zeebe;
 
-import io.zeebe.client.api.events.WorkflowInstanceEvent;
+import io.zeebe.client.api.response.WorkflowInstanceEvent;
 
 public class Application
 {
@@ -177,19 +225,19 @@ public class Application
 Run the program and verify that the workflow instance is created. You should see the output:
 
 ```
-Workflow instance created. Key: 6
+Workflow instance created. Key: 2113425532
 ```
 
 You did it! You want to see how the workflow instance is executed?
 
-Start the Zeebe Monitor using `java -jar zeebe-simple-monitor.jar`.
+If you are running with Docker, just open [http://localhost:8082](http://localhost:8082) in your browser.
 
-Open a web browser and go to <http://localhost:8080/>.
+If you are running without Docker:
+* Start the Zeebe Monitor using `java -jar zeebe-simple-monitor-app-*.jar`.
+* Open a web browser and go to <http://localhost:8080/>.
 
-Connect to the broker and switch to the workflow instances view.
-Here, you see the current state of the workflow instance which includes active jobs, completed activities, the payload and open incidents.
-
-![zeebe-monitor-step-1](/java-client/zeebe-monitor-1.png)
+In the Simple Monitor interface, you see the current state of the workflow instance.
+![zeebe-monitor-step-1](/java-client/java-get-started-monitor-1.gif)
 
 ## Work on a job
 
@@ -205,19 +253,20 @@ Insert a few service tasks between the start and the end event.
 You need to set the type of each task, which identifies the nature of the work to be performed.
 Set the type of the first task to 'payment-service'.
 
-Optionally, you can define parameters of the task by adding headers.
-Add the header `method = VISA` to the first task.
+Set the type of the second task to 'fetcher-service'.
+
+Set the type of the third task to 'shipping-service'.
 
 Save the BPMN diagram and switch back to the main class.
 
-Add the following lines to create a [job worker][] for the first jobs type:
+Add the following lines to create a job worker for the first jobs type:
 
 ```java
 package io.zeebe;
 
-import io.zeebe.client.api.subscription.JobWorker;
+import io.zeebe.client.api.worker.JobWorker;
 
-public class Application
+public class App
 {
     public static void main(String[] args)
     {
@@ -227,10 +276,7 @@ public class Application
             .jobType("payment-service")
             .handler((jobClient, job) ->
             {
-                final Map<String, Object> headers = job.getCustomHeaders();
-                final String method = (String) headers.get("method");
-
-                System.out.println("Collect money using payment method: " + method);
+                System.out.println("Collect money");
 
                 // ...
 
@@ -242,7 +288,8 @@ public class Application
 
         // waiting for the jobs
 
-        jobWorker.close();
+        // Don't close, we need to keep polling to get work
+        // jobWorker.close();
 
         // ...
     }
@@ -252,45 +299,34 @@ public class Application
 Run the program and verify that the job is processed. You should see the output:
 
 ```
-Collect money using payment method: VISA
+Collect money
 ```
 
 When you have a look at the Zeebe Monitor, then you can see that the workflow instance moved from the first service task to the next one:
 
-![zeebe-monitor-step-2](/java-client/zeebe-monitor-2.png)
+![zeebe-monitor-step-2](/java-client/java-get-started-monitor-2.gif)
 
 ## Work with data
 
-Usually, a workflow is more than just tasks, there is also data flow.
-The tasks need data as input and in order to produce data.
+Usually, a workflow is more than just tasks, there is also a data flow. The worker gets the data from the workflow instance to do its work and send the result back to the workflow instance.
 
-In Zeebe, the data is represented as a JSON document.
-When you create a workflow instance, then you can pass the data as payload.
-Within the workflow, you can use input and output mappings on tasks to control the data flow.
+In Zeebe, the data is stored as key-value-pairs in form of variables. Variables can be set when the workflow instance is created. Within the workflow, variables can be read and modified by workers.
 
-In our example, we want to create a workflow instance with the following data:
+In our example, we want to create a workflow instance with the following variables:
 
 ```json
-{
-  "orderId": 31243,
-  "orderItems": [435, 182, 376]
-}
+"orderId": 31243
+"orderItems": [435, 182, 376]
 ```
 
-The first task should take `orderId` as input and return `totalPrice` as result.
+The first task should read `orderId` as input and return `totalPrice` as result.
 
-Open the BPMN diagram and switch to the input-output-mappings of the first task.
-Add the input mapping `$.orderId : $.orderId` and the output mapping `$.totalPrice : $.totalPrice`.
-
-Save the BPMN diagram and go back to the main class.
-
-Modify the create command and pass the data as payload.
-Also, modify the job worker to read the jobs payload and complete the job with payload.
+Modify the workflow instance create command and pass the data as variables. Also, modify the job worker to read the job variables and complete the job with a result.
 
 ```java
 package io.zeebe;
 
-public class Application
+public class App
 {
     public static void main(String[] args)
     {
@@ -303,7 +339,7 @@ public class Application
         final WorkflowInstanceEvent wfInstance = client.newCreateInstanceCommand()
             .bpmnProcessId("order-process")
             .latestVersion()
-            .payload(data)
+            .variables(data)
             .send()
             .join();
 
@@ -313,23 +349,23 @@ public class Application
             .jobType("payment-service")
             .handler((jobClient, job) ->
             {
-                final Map<String, Object> headers = job.getCustomHeaders();
-                final String method = (String) headers.get("method");
+                final Map<String, Object> variables = job.getVariablesAsMap();
 
-                final Map<String, Object> payload = job.getPayloadAsMap();
-
-                System.out.println("Process order: " + payload.get("orderId"));
-                System.out.println("Collect money using payment method: " + method);
+                System.out.println("Process order: " + variables.get("orderId"));
+                double price = 46.50;
+                System.out.println("Collect money: $" + price);
 
                 // ...
 
-                payload.put("totalPrice", 46.50);
+                final Map<String, Object> result = new HashMap<>();
+                result.put("totalPrice", price);
 
                 jobClient.newCompleteCommand(job.getKey())
-                    .payload(payload)
+                    .variables(result)
                     .send()
                     .join();
             })
+            .fetchVariables("orderId")
             .open();
 
         // ...
@@ -337,16 +373,16 @@ public class Application
 }
 ```
 
-Run the program and verify that the payload is mapped into the job. You should see the output:
+Run the program and verify that the variable is read. You should see the output:
 
 ```
-Process order: {"orderId":31243}
-Collect money using payment method: VISA
+Process order: 31243
+Collect money: $46.50
 ```
 
-When we have a look at the Zeebe Monitor, then we can see how the payload is modified after the activity:
+When we have a look at the Zeebe Monitor, then we can see that the variable `totalPrice` is set:
 
-![zeebe-monitor-step-3](/java-client/zeebe-monitor-3.png)
+![zeebe-monitor-step-3](/java-client/java-get-started-monitor-3.gif)
 
 ## What's next?
 
@@ -358,3 +394,4 @@ Next steps:
 * Take a deeper look into the [Java client](java-client/README.html)
 
 [job worker]: ../basics/job-workers.html
+[zeebe-docker-compose]: https://github.com/zeebe-io/zeebe-docker-compose

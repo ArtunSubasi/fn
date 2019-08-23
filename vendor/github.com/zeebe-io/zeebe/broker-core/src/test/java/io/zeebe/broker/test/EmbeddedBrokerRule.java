@@ -1,36 +1,27 @@
 /*
- * Zeebe Broker Core
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.broker.test;
 
+import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.ATOMIX_SERVICE;
 import static io.zeebe.broker.test.EmbeddedBrokerConfigurator.DEBUG_EXPORTER;
 import static io.zeebe.broker.test.EmbeddedBrokerConfigurator.HTTP_EXPORTER;
 import static io.zeebe.broker.test.EmbeddedBrokerConfigurator.TEST_RECORDER;
-import static io.zeebe.broker.test.EmbeddedBrokerConfigurator.setClientApiPort;
+import static io.zeebe.broker.test.EmbeddedBrokerConfigurator.setCommandApiPort;
 import static io.zeebe.broker.test.EmbeddedBrokerConfigurator.setGatewayApiPort;
-import static io.zeebe.broker.test.EmbeddedBrokerConfigurator.setManagementApiPort;
-import static io.zeebe.broker.test.EmbeddedBrokerConfigurator.setReplicationApiPort;
-import static io.zeebe.broker.test.EmbeddedBrokerConfigurator.setSubscriptionApiPort;
-import static io.zeebe.broker.workflow.WorkflowServiceNames.WORKFLOW_REPOSITORY_SERVICE;
+import static io.zeebe.broker.test.EmbeddedBrokerConfigurator.setGatewayClusterPort;
+import static io.zeebe.broker.test.EmbeddedBrokerConfigurator.setInternalApiPort;
+import static io.zeebe.broker.test.EmbeddedBrokerConfigurator.setMonitoringPort;
 
+import io.atomix.core.Atomix;
 import io.zeebe.broker.Broker;
 import io.zeebe.broker.TestLoggers;
-import io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames;
 import io.zeebe.broker.clustering.base.partitions.Partition;
+import io.zeebe.broker.clustering.base.partitions.PartitionServiceNames;
 import io.zeebe.broker.system.configuration.BrokerCfg;
 import io.zeebe.broker.transport.TransportServiceNames;
 import io.zeebe.protocol.Protocol;
@@ -66,29 +57,26 @@ import org.slf4j.Logger;
 
 public class EmbeddedBrokerRule extends ExternalResource {
 
-  private static final boolean ENABLE_DEBUG_EXPORTER = false;
-  private static final boolean ENABLE_HTTP_EXPORTER = false;
-
-  private static final String SNAPSHOTS_DIRECTORY = "snapshots";
-  private static final String STATE_DIRECTORY = "state";
   public static final String DEFAULT_CONFIG_FILE = "zeebe.test.cfg.toml";
-
-  protected static final Logger LOG = TestLoggers.TEST_LOGGER;
   public static final int INSTALL_TIMEOUT = 15;
   public static final TimeUnit INSTALL_TIMEOUT_UNIT = TimeUnit.SECONDS;
   public static final String INSTALL_TIMEOUT_ERROR_MSG =
       "Deployment partition not installed into the container within %d %s.";
-
+  protected static final Logger LOG = TestLoggers.TEST_LOGGER;
+  private static final boolean ENABLE_DEBUG_EXPORTER = false;
+  private static final boolean ENABLE_HTTP_EXPORTER = false;
+  private static final String SNAPSHOTS_DIRECTORY = "snapshots";
+  private static final String STATE_DIRECTORY = "state";
   protected final RecordingExporterTestWatcher recordingExporterTestWatcher =
       new RecordingExporterTestWatcher();
-
-  protected BrokerCfg brokerCfg;
-  protected Broker broker;
-
-  protected ControlledActorClock controlledActorClock = new ControlledActorClock();
-
   protected final Supplier<InputStream> configSupplier;
   protected final Consumer<BrokerCfg>[] configurators;
+  protected BrokerCfg brokerCfg;
+  protected Broker broker;
+  protected ControlledActorClock controlledActorClock = new ControlledActorClock();
+  protected long startTime;
+  private File newTemporaryFolder;
+  private List<String> dataDirectories;
 
   @SafeVarargs
   public EmbeddedBrokerRule(Consumer<BrokerCfg>... configurators) {
@@ -113,10 +101,26 @@ public class EmbeddedBrokerRule extends ExternalResource {
     this.configurators = configurators;
   }
 
-  protected long startTime;
+  private static void deleteSnapshots(final File parentDir) {
+    final File snapshotDirectory = new File(parentDir, SNAPSHOTS_DIRECTORY);
 
-  private File newTemporaryFolder;
-  private List<String> dataDirectories;
+    if (snapshotDirectory.exists()) {
+      try {
+        FileUtil.deleteFolder(snapshotDirectory.getAbsolutePath());
+      } catch (final IOException e) {
+        throw new RuntimeException(
+            "Could not delete snapshot directory " + snapshotDirectory.getAbsolutePath(), e);
+      }
+    }
+  }
+
+  public static void assignSocketAddresses(final BrokerCfg brokerCfg) {
+    setGatewayApiPort(SocketUtil.getNextAddress().port()).accept(brokerCfg);
+    setGatewayClusterPort(SocketUtil.getNextAddress().port()).accept(brokerCfg);
+    setCommandApiPort(SocketUtil.getNextAddress().port()).accept(brokerCfg);
+    setInternalApiPort(SocketUtil.getNextAddress().port()).accept(brokerCfg);
+    setMonitoringPort(SocketUtil.getNextAddress().port()).accept(brokerCfg);
+  }
 
   @Override
   public Statement apply(final Statement base, final Description description) {
@@ -162,16 +166,16 @@ public class EmbeddedBrokerRule extends ExternalResource {
     return brokerCfg;
   }
 
-  public SocketAddress getClientAddress() {
-    return brokerCfg.getNetwork().getClient().toSocketAddress();
+  public Atomix getAtomix() {
+    return getService(ATOMIX_SERVICE);
+  }
+
+  public SocketAddress getCommandAdress() {
+    return brokerCfg.getNetwork().getCommandApi().toSocketAddress();
   }
 
   public SocketAddress getGatewayAddress() {
     return brokerCfg.getGateway().getNetwork().toSocketAddress();
-  }
-
-  public SocketAddress getManagementAddress() {
-    return brokerCfg.getNetwork().getManagement().toSocketAddress();
   }
 
   public Broker getBroker() {
@@ -222,10 +226,9 @@ public class EmbeddedBrokerRule extends ExternalResource {
 
       serviceContainer
           .createService(TestService.NAME, new TestService())
-          .dependency(ClusterBaseLayerServiceNames.leaderPartitionServiceName(partitionName))
-          .dependency(WORKFLOW_REPOSITORY_SERVICE)
+          .dependency(PartitionServiceNames.leaderPartitionServiceName(partitionName))
           .dependency(
-              TransportServiceNames.serverTransport(TransportServiceNames.CLIENT_API_SERVER_NAME))
+              TransportServiceNames.serverTransport(TransportServiceNames.COMMAND_API_SERVER_NAME))
           .install()
           .get(INSTALL_TIMEOUT, INSTALL_TIMEOUT_UNIT);
 
@@ -282,19 +285,6 @@ public class EmbeddedBrokerRule extends ExternalResource {
     }
   }
 
-  private static void deleteSnapshots(final File parentDir) {
-    final File snapshotDirectory = new File(parentDir, SNAPSHOTS_DIRECTORY);
-
-    if (snapshotDirectory.exists()) {
-      try {
-        FileUtil.deleteFolder(snapshotDirectory.getAbsolutePath());
-      } catch (final IOException e) {
-        throw new RuntimeException(
-            "Could not delete snapshot directory " + snapshotDirectory.getAbsolutePath(), e);
-      }
-    }
-  }
-
   public <S> S getService(final ServiceName<S> serviceName) {
     final ServiceContainer serviceContainer = broker.getBrokerContext().getServiceContainer();
 
@@ -312,9 +302,12 @@ public class EmbeddedBrokerRule extends ExternalResource {
       throw new RuntimeException(e);
     }
 
+    // capture value before removing the service as it will uninject the value on stop
+    final S value = injector.getValue();
+
     serviceContainer.removeService(accessorServiceName);
 
-    return injector.getValue();
+    return value;
   }
 
   public <T> void installService(
@@ -337,16 +330,8 @@ public class EmbeddedBrokerRule extends ExternalResource {
     }
   }
 
-  public static void assignSocketAddresses(final BrokerCfg brokerCfg) {
-    setGatewayApiPort(SocketUtil.getNextAddress().port()).accept(brokerCfg);
-    setClientApiPort(SocketUtil.getNextAddress().port()).accept(brokerCfg);
-    setManagementApiPort(SocketUtil.getNextAddress().port()).accept(brokerCfg);
-    setReplicationApiPort(SocketUtil.getNextAddress().port()).accept(brokerCfg);
-    setSubscriptionApiPort(SocketUtil.getNextAddress().port()).accept(brokerCfg);
-  }
-
   public void interruptClientConnections() {
-    getService(TransportServiceNames.serverTransport(TransportServiceNames.CLIENT_API_SERVER_NAME))
+    getService(TransportServiceNames.serverTransport(TransportServiceNames.COMMAND_API_SERVER_NAME))
         .interruptAllChannels();
   }
 

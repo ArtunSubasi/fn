@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.transport;
 
@@ -27,13 +19,11 @@ import io.zeebe.transport.impl.DefaultChannelFactory;
 import io.zeebe.transport.impl.RemoteAddressImpl;
 import io.zeebe.transport.impl.TransportChannel;
 import io.zeebe.transport.impl.TransportChannel.ChannelLifecycleListener;
-import io.zeebe.transport.impl.TransportChannel.TransportChannelMetrics;
 import io.zeebe.transport.impl.TransportChannelFactory;
 import io.zeebe.transport.impl.util.SocketUtil;
 import io.zeebe.transport.util.RecordingChannelListener;
 import io.zeebe.transport.util.RecordingChannelListener.Event;
 import io.zeebe.util.buffer.BufferWriter;
-import io.zeebe.util.metrics.MetricsManager;
 import io.zeebe.util.sched.testing.ActorSchedulerRule;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -217,16 +207,13 @@ public class TransportChannelListenerTest {
   }
 
   protected static class ImmediatelyClosingChannelFactory implements TransportChannelFactory {
-    private final TransportChannelMetrics metrics =
-        new TransportChannelMetrics(new MetricsManager(), "test");
-
     @Override
     public TransportChannel buildClientChannel(
         ChannelLifecycleListener listener,
         RemoteAddressImpl remoteAddress,
         int maxMessageSize,
         FragmentHandler readHandler) {
-      return new TransportChannel(listener, remoteAddress, maxMessageSize, readHandler, metrics) {
+      return new TransportChannel(listener, remoteAddress, maxMessageSize, readHandler) {
         @Override
         public void finishConnect() {
           super.finishConnect();

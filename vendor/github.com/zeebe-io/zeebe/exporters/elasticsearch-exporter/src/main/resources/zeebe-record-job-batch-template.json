@@ -19,9 +19,9 @@
               "type": "keyword"
             },
             "timeout": {
-              "type": "date"
+              "type": "long"
             },
-            "amount": {
+            "maxJobsToActivate": {
               "type": "integer"
             },
             "jobKeys": {
@@ -34,27 +34,23 @@
                 "type": {
                   "type": "keyword"
                 },
-                "headers": {
-                  "properties": {
-                    "elementId": {
-                      "type": "keyword"
-                    },
-                    "elementInstanceKey": {
-                      "type": "long"
-                    },
-                    "bpmnProcessId": {
-                      "type": "keyword"
-                    },
-                    "workflowDefinitionVersion": {
-                      "type": "integer"
-                    },
-                    "workflowInstanceKey": {
-                      "type": "long"
-                    },
-                    "workflowKey": {
-                      "type": "long"
-                    }
-                  }
+                "elementId": {
+                  "type": "text"
+                },
+                "elementInstanceKey": {
+                  "type": "long"
+                },
+                "bpmnProcessId": {
+                  "type": "keyword"
+                },
+                "workflowDefinitionVersion": {
+                  "type": "integer"
+                },
+                "workflowInstanceKey": {
+                  "type": "long"
+                },
+                "workflowKey": {
+                  "type": "long"
                 },
                 "customHeaders": {
                   "dynamic": true,
@@ -69,13 +65,16 @@
                 "deadline": {
                   "type": "date"
                 },
-                "payload": {
-                  "type": "text"
+                "variables": {
+                  "enabled": false
                 },
                 "errorMessage": {
                   "type": "text"
                 }
               }
+            },
+            "truncated": {
+              "type": "boolean"
             }
           }
         }

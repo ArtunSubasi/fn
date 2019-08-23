@@ -3,26 +3,85 @@
 
   <modelVersion>4.0.0</modelVersion>
   <name>Zeebe Elasticsearch Exporter</name>
-  <artifactId>zb-elasticsearch-exporter</artifactId>
+  <artifactId>zeebe-elasticsearch-exporter</artifactId>
   <packaging>jar</packaging>
 
   <parent>
-    <artifactId>zb-parent</artifactId>
+    <artifactId>zeebe-parent</artifactId>
     <groupId>io.zeebe</groupId>
-    <version>0.15.0-SNAPSHOT</version>
+    <version>0.20.0</version>
     <relativePath>../../parent/pom.xml</relativePath>
   </parent>
 
 
+  <properties>
+    <paths.certificates>${project.build.testResources[0].directory}/certs/</paths.certificates>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>io.zeebe</groupId>
-      <artifactId>zb-exporter-api</artifactId>
+      <artifactId>zeebe-exporter-api</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.zeebe</groupId>
+      <artifactId>zeebe-protocol</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.elasticsearch</groupId>
+      <artifactId>elasticsearch</artifactId>
     </dependency>
 
     <dependency>
       <groupId>org.elasticsearch.client</groupId>
       <artifactId>elasticsearch-rest-high-level-client</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.elasticsearch.client</groupId>
+      <artifactId>elasticsearch-rest-client</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.elasticsearch</groupId>
+      <artifactId>elasticsearch-x-content</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpasyncclient</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpclient</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpcore-nio</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>com.carrotsearch</groupId>
+      <artifactId>hppc</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpcore</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.prometheus</groupId>
+      <artifactId>simpleclient</artifactId>
     </dependency>
 
     <dependency>
@@ -33,31 +92,19 @@
 
     <dependency>
       <groupId>io.zeebe</groupId>
-      <artifactId>zeebe-client-java</artifactId>
+      <artifactId>zeebe-test-util</artifactId>
       <scope>test</scope>
     </dependency>
 
     <dependency>
       <groupId>io.zeebe</groupId>
-      <artifactId>zeebe-broker-core</artifactId>
+      <artifactId>zeebe-util</artifactId>
       <scope>test</scope>
     </dependency>
 
     <dependency>
-      <groupId>io.zeebe</groupId>
-      <artifactId>zb-test-util</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-slf4j-impl</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-core</artifactId>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
       <scope>test</scope>
     </dependency>
 
@@ -78,6 +125,13 @@
       <artifactId>mockito-core</artifactId>
       <scope>test</scope>
     </dependency>
+
+    <dependency>
+      <groupId>pl.allegro.tech</groupId>
+      <artifactId>embedded-elasticsearch</artifactId>
+      <scope>test</scope>
+    </dependency>
+
   </dependencies>
 
   <build>
@@ -85,13 +139,15 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
-      </plugin>
-
-      <plugin>
-        <groupId>com.github.alexcojocaru</groupId>
-        <artifactId>elasticsearch-maven-plugin</artifactId>
         <configuration>
-          <version>${version.elasticsearch}</version>
+          <systemPropertyVariables>
+            <javax.net.ssl.trustStore>
+              ${paths.certificates}/elastic-stack-ca.p12
+            </javax.net.ssl.trustStore>
+            <javax.net.ssl.trustStorePassword>changeit</javax.net.ssl.trustStorePassword>
+            <javax.net.ssl.trustStoreType>pkcs12</javax.net.ssl.trustStoreType>
+          </systemPropertyVariables>
+          <rerunFailingTestsCount>3</rerunFailingTestsCount>
         </configuration>
       </plugin>
     </plugins>

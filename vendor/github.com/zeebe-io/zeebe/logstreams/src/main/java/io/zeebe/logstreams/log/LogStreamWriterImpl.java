@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.logstreams.log;
 
@@ -21,12 +13,9 @@ import static io.zeebe.logstreams.impl.LogEntryDescriptor.metadataOffset;
 import static io.zeebe.logstreams.impl.LogEntryDescriptor.setKey;
 import static io.zeebe.logstreams.impl.LogEntryDescriptor.setMetadataLength;
 import static io.zeebe.logstreams.impl.LogEntryDescriptor.setPosition;
-import static io.zeebe.logstreams.impl.LogEntryDescriptor.setProducerId;
-import static io.zeebe.logstreams.impl.LogEntryDescriptor.setRaftTerm;
 import static io.zeebe.logstreams.impl.LogEntryDescriptor.setSourceEventPosition;
 import static io.zeebe.logstreams.impl.LogEntryDescriptor.setTimestamp;
 import static io.zeebe.logstreams.impl.LogEntryDescriptor.valueOffset;
-import static org.agrona.BitUtil.SIZE_OF_LONG;
 
 import io.zeebe.dispatcher.ClaimedFragment;
 import io.zeebe.dispatcher.Dispatcher;
@@ -46,13 +35,9 @@ public class LogStreamWriterImpl implements LogStreamRecordWriter {
 
   private LogStream logStream;
 
-  protected boolean positionAsKey;
   protected long key;
 
   protected long sourceRecordPosition = -1L;
-  protected int producerId = -1;
-
-  protected final short keyLength = SIZE_OF_LONG;
 
   protected BufferWriter metadataWriter;
 
@@ -76,12 +61,6 @@ public class LogStreamWriterImpl implements LogStreamRecordWriter {
   }
 
   @Override
-  public LogStreamRecordWriter positionAsKey() {
-    positionAsKey = true;
-    return this;
-  }
-
-  @Override
   public LogStreamRecordWriter key(final long key) {
     this.key = key;
     return this;
@@ -89,12 +68,6 @@ public class LogStreamWriterImpl implements LogStreamRecordWriter {
 
   public LogStreamRecordWriter sourceRecordPosition(final long position) {
     this.sourceRecordPosition = position;
-    return this;
-  }
-
-  @Override
-  public LogStreamRecordWriter producerId(final int producerId) {
-    this.producerId = producerId;
     return this;
   }
 
@@ -135,12 +108,10 @@ public class LogStreamWriterImpl implements LogStreamRecordWriter {
 
   @Override
   public void reset() {
-    positionAsKey = false;
     key = LogEntryDescriptor.KEY_NULL_VALUE;
     metadataWriter = metadataWriterInstance;
     valueWriter = null;
     sourceRecordPosition = -1L;
-    producerId = -1;
 
     bufferWriterInstance.reset();
     metadataWriterInstance.reset();
@@ -165,14 +136,10 @@ public class LogStreamWriterImpl implements LogStreamRecordWriter {
         final MutableDirectBuffer writeBuffer = claimedFragment.getBuffer();
         final int bufferOffset = claimedFragment.getOffset();
 
-        final long keyToWrite = positionAsKey ? claimedPosition : key;
-
         // write log entry header
         setPosition(writeBuffer, bufferOffset, claimedPosition);
-        setRaftTerm(writeBuffer, bufferOffset, logStream.getTerm());
-        setProducerId(writeBuffer, bufferOffset, producerId);
         setSourceEventPosition(writeBuffer, bufferOffset, sourceRecordPosition);
-        setKey(writeBuffer, bufferOffset, keyToWrite);
+        setKey(writeBuffer, bufferOffset, key);
         setTimestamp(writeBuffer, bufferOffset, ActorClock.currentTimeMillis());
         setMetadataLength(writeBuffer, bufferOffset, (short) metadataLength);
 

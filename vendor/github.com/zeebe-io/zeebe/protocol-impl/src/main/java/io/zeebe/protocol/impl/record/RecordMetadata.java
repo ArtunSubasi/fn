@@ -1,30 +1,23 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.protocol.impl.record;
 
 import io.zeebe.protocol.Protocol;
-import io.zeebe.protocol.clientapi.MessageHeaderDecoder;
-import io.zeebe.protocol.clientapi.MessageHeaderEncoder;
-import io.zeebe.protocol.clientapi.RecordMetadataDecoder;
-import io.zeebe.protocol.clientapi.RecordMetadataEncoder;
-import io.zeebe.protocol.clientapi.RecordType;
-import io.zeebe.protocol.clientapi.RejectionType;
-import io.zeebe.protocol.clientapi.ValueType;
-import io.zeebe.protocol.intent.Intent;
+import io.zeebe.protocol.record.MessageHeaderDecoder;
+import io.zeebe.protocol.record.MessageHeaderEncoder;
+import io.zeebe.protocol.record.RecordMetadataDecoder;
+import io.zeebe.protocol.record.RecordMetadataEncoder;
+import io.zeebe.protocol.record.RecordType;
+import io.zeebe.protocol.record.RejectionType;
+import io.zeebe.protocol.record.ValueType;
+import io.zeebe.protocol.record.intent.Intent;
 import io.zeebe.util.buffer.BufferReader;
+import io.zeebe.util.buffer.BufferUtil;
 import io.zeebe.util.buffer.BufferWriter;
 import java.nio.charset.StandardCharsets;
 import org.agrona.DirectBuffer;
@@ -44,10 +37,9 @@ public class RecordMetadata implements BufferWriter, BufferReader {
   private RecordType recordType = RecordType.NULL_VAL;
   private short intentValue = Intent.NULL_VAL;
   private Intent intent = null;
-  protected int requestStreamId;
+  private int requestStreamId;
   protected long requestId;
-  protected int protocolVersion =
-      Protocol.PROTOCOL_VERSION; // always the current version by default
+  private int protocolVersion = Protocol.PROTOCOL_VERSION; // always the current version by default
   protected ValueType valueType = ValueType.NULL_VAL;
   private RejectionType rejectionType;
   private final UnsafeBuffer rejectionReason = new UnsafeBuffer(0, 0);
@@ -76,10 +68,12 @@ public class RecordMetadata implements BufferWriter, BufferReader {
 
     final int rejectionReasonLength = decoder.rejectionReasonLength();
 
-    offset += headerDecoder.blockLength();
-    offset += RecordMetadataDecoder.rejectionReasonHeaderLength();
+    if (rejectionReasonLength > 0) {
+      offset += headerDecoder.blockLength();
+      offset += RecordMetadataDecoder.rejectionReasonHeaderLength();
 
-    rejectionReason.wrap(buffer, offset, rejectionReasonLength);
+      rejectionReason.wrap(buffer, offset, rejectionReasonLength);
+    }
   }
 
   @Override
@@ -196,8 +190,8 @@ public class RecordMetadata implements BufferWriter, BufferReader {
     return this;
   }
 
-  public DirectBuffer getRejectionReason() {
-    return rejectionReason;
+  public String getRejectionReason() {
+    return BufferUtil.bufferAsString(rejectionReason);
   }
 
   public RecordMetadata reset() {
@@ -213,15 +207,6 @@ public class RecordMetadata implements BufferWriter, BufferReader {
     return this;
   }
 
-  public boolean hasRequestMetadata() {
-    return requestId != RecordMetadataEncoder.requestIdNullValue()
-        && requestStreamId != RecordMetadataEncoder.requestStreamIdNullValue();
-  }
-
-  public void copyRequestMetadata(RecordMetadata target) {
-    target.requestId(requestId).requestStreamId(requestStreamId);
-  }
-
   @Override
   public String toString() {
     return "RecordMetadata{"
@@ -235,8 +220,14 @@ public class RecordMetadata implements BufferWriter, BufferReader {
         + requestStreamId
         + ", requestId="
         + requestId
+        + ", protocolVersion="
+        + protocolVersion
         + ", valueType="
         + valueType
+        + ", rejectionType="
+        + rejectionType
+        + ", rejectionReason="
+        + BufferUtil.bufferAsString(rejectionReason)
         + '}';
   }
 }

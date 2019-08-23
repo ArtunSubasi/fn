@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.logstreams.log;
 
@@ -28,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.zeebe.logstreams.impl.CompleteEventsInBlockProcessor;
 import io.zeebe.logstreams.impl.log.fs.FsLogStorage;
 import io.zeebe.logstreams.impl.log.fs.FsLogStorageConfiguration;
-import io.zeebe.util.metrics.MetricsManager;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
@@ -57,11 +49,11 @@ public class CompleteInBlockProcessorTest {
   private long appendedAddress;
 
   @Before
-  public void init() {
+  public void init() throws IOException {
     processor = new CompleteEventsInBlockProcessor();
     logPath = tempFolder.getRoot().getAbsolutePath();
     fsStorageConfig = new FsLogStorageConfiguration(SEGMENT_SIZE, logPath, 0, false);
-    fsLogStorage = new FsLogStorage(fsStorageConfig, new MetricsManager(), 0);
+    fsLogStorage = new FsLogStorage(fsStorageConfig);
 
     final ByteBuffer writeBuffer = ByteBuffer.allocate(192);
     final MutableDirectBuffer directBuffer = new UnsafeBuffer(0, 0);
@@ -202,7 +194,8 @@ public class CompleteInBlockProcessorTest {
   }
 
   @Test
-  public void shouldInsufficientBufferCapacityIfPosWasSetAndNewEventCantReadCompletely() {
+  public void shouldInsufficientBufferCapacityIfPosWasSetAndNewEventCantReadCompletely()
+      throws IOException {
     // given
     final int largeEventMetadataSize = 8;
     final int writeBufferLength = (3 * ALIGNED_LEN) + largeEventMetadataSize;

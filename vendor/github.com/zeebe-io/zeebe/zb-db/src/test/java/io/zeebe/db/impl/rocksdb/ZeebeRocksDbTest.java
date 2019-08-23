@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.db.impl.rocksdb;
 
@@ -45,7 +37,7 @@ public class ZeebeRocksDbTest {
     final DbString value = new DbString();
     value.wrapString("bar");
     final ColumnFamily<DbString, DbString> columnFamily =
-        db.createColumnFamily(DefaultColumnFamily.DEFAULT, key, value);
+        db.createColumnFamily(DefaultColumnFamily.DEFAULT, db.createContext(), key, value);
     columnFamily.put(key, value);
 
     // when
@@ -70,7 +62,7 @@ public class ZeebeRocksDbTest {
     final DbString value = new DbString();
     value.wrapString("bar");
     ColumnFamily<DbString, DbString> columnFamily =
-        db.createColumnFamily(DefaultColumnFamily.DEFAULT, key, value);
+        db.createColumnFamily(DefaultColumnFamily.DEFAULT, db.createContext(), key, value);
     columnFamily.put(key, value);
     db.close();
 
@@ -78,7 +70,8 @@ public class ZeebeRocksDbTest {
     db = dbFactory.createDb(pathName);
 
     // then
-    columnFamily = db.createColumnFamily(DefaultColumnFamily.DEFAULT, key, value);
+    columnFamily =
+        db.createColumnFamily(DefaultColumnFamily.DEFAULT, db.createContext(), key, value);
     final DbString zbString = columnFamily.get(key);
     assertThat(zbString).isNotNull();
     assertThat(zbString.toString()).isEqualTo("bar");
@@ -99,7 +92,7 @@ public class ZeebeRocksDbTest {
     final DbString value = new DbString();
     value.wrapString("bar");
     ColumnFamily<DbString, DbString> columnFamily =
-        db.createColumnFamily(DefaultColumnFamily.DEFAULT, key, value);
+        db.createColumnFamily(DefaultColumnFamily.DEFAULT, db.createContext(), key, value);
     columnFamily.put(key, value);
 
     final File snapshotDir = new File(temporaryFolder.newFolder(), "snapshot");
@@ -111,7 +104,8 @@ public class ZeebeRocksDbTest {
     assertThat(pathName.listFiles()).isNotEmpty();
     db.close();
     db = dbFactory.createDb(snapshotDir);
-    columnFamily = db.createColumnFamily(DefaultColumnFamily.DEFAULT, key, value);
+    columnFamily =
+        db.createColumnFamily(DefaultColumnFamily.DEFAULT, db.createContext(), key, value);
 
     // then
     final DbString dbString = columnFamily.get(key);

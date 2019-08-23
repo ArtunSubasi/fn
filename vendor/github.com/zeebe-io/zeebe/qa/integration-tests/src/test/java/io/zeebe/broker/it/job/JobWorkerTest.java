@@ -1,45 +1,35 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.broker.it.job;
 
-import static io.zeebe.exporter.record.Assertions.assertThat;
+import static io.zeebe.protocol.record.Assertions.assertThat;
 import static io.zeebe.test.util.TestUtil.waitUntil;
 import static io.zeebe.test.util.record.RecordingExporter.jobBatchRecords;
 import static io.zeebe.test.util.record.RecordingExporter.jobRecords;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.entry;
 
 import io.zeebe.broker.it.GrpcClientRule;
 import io.zeebe.broker.it.util.RecordingJobHandler;
 import io.zeebe.broker.test.EmbeddedBrokerRule;
 import io.zeebe.client.ZeebeClient;
 import io.zeebe.client.api.response.ActivatedJob;
-import io.zeebe.client.api.subscription.JobWorker;
-import io.zeebe.exporter.record.Record;
-import io.zeebe.exporter.record.value.JobRecordValue;
-import io.zeebe.protocol.intent.JobBatchIntent;
-import io.zeebe.protocol.intent.JobIntent;
+import io.zeebe.client.api.worker.JobWorker;
+import io.zeebe.protocol.record.Record;
+import io.zeebe.protocol.record.intent.JobBatchIntent;
+import io.zeebe.protocol.record.intent.JobIntent;
+import io.zeebe.protocol.record.value.JobRecordValue;
 import io.zeebe.test.util.TestUtil;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import org.junit.Before;
 import org.junit.Rule;
@@ -115,10 +105,10 @@ public class JobWorkerTest {
     waitUntil(() -> jobRecords(JobIntent.COMPLETED).exists());
 
     final Record<JobRecordValue> createRecord = jobRecords(JobIntent.CREATE).getFirst();
-    assertThat(createRecord.getValue()).hasDeadline(null).hasWorker("");
+    assertThat(createRecord.getValue()).hasDeadline(-1).hasWorker("");
 
     final Record<JobRecordValue> createdRecord = jobRecords(JobIntent.CREATED).getFirst();
-    assertThat(createdRecord.getValue()).hasDeadline(null);
+    assertThat(createdRecord.getValue()).hasDeadline(-1);
 
     final Record<JobRecordValue> activatedRecord = jobRecords(JobIntent.ACTIVATED).getFirst();
     assertThat(activatedRecord.getValue().getDeadline()).isNotNull();
@@ -134,7 +124,7 @@ public class JobWorkerTest {
     // when
     final RecordingJobHandler jobHandler =
         new RecordingJobHandler(
-            (c, t) -> c.newCompleteCommand(t.getKey()).payload("{\"a\":3}").send());
+            (c, t) -> c.newCompleteCommand(t.getKey()).variables("{\"a\":3}").send());
 
     client
         .newWorker()
@@ -152,12 +142,12 @@ public class JobWorkerTest {
     final ActivatedJob subscribedJob = jobHandler.getHandledJobs().get(0);
     assertThat(subscribedJob.getKey()).isEqualTo(jobKey);
     assertThat(subscribedJob.getType()).isEqualTo("foo");
-    assertThat(subscribedJob.getDeadline()).isAfter(Instant.now());
+    assertThat(subscribedJob.getDeadline()).isGreaterThan(Instant.now().toEpochMilli());
 
     waitUntil(() -> jobRecords(JobIntent.COMPLETED).exists());
 
     final Record<JobRecordValue> completedRecord = jobRecords(JobIntent.COMPLETED).getFirst();
-    assertThat(completedRecord.getValue().getPayload()).isEqualTo("{\"a\":3}");
+    assertThat(completedRecord.getValue().getVariables()).containsExactly(entry("a", 3));
     assertThat(completedRecord.getValue()).hasCustomHeaders(Collections.singletonMap("b", "2"));
   }
 
@@ -209,7 +199,7 @@ public class JobWorkerTest {
         .handler(handler)
         .timeout(Duration.ofMinutes(5))
         .name("test")
-        .bufferSize(10)
+        .maxJobsActive(10)
         .open();
 
     // when
@@ -267,11 +257,14 @@ public class JobWorkerTest {
     // given
     final long jobKey = createJobOfType("foo");
     final String failureMessage = "expected failure";
+    final StringWriter exceptionWriter = new StringWriter();
 
     final RecordingJobHandler jobHandler =
         new RecordingJobHandler(
             (c, j) -> {
-              throw new RuntimeException(failureMessage);
+              final RuntimeException runtimeException = new RuntimeException(failureMessage);
+              runtimeException.printStackTrace(new PrintWriter(exceptionWriter));
+              throw runtimeException;
             },
             (c, j) -> c.newCompleteCommand(j.getKey()).send().join());
 
@@ -292,7 +285,7 @@ public class JobWorkerTest {
         .containsExactly(jobKey, jobKey);
 
     final Record<JobRecordValue> failedJob = jobRecords(JobIntent.FAILED).getFirst();
-    assertThat(failedJob.getValue()).hasErrorMessage(failureMessage);
+    assertThat(failedJob.getValue()).hasErrorMessage(exceptionWriter.toString());
 
     waitUntil(() -> jobRecords(JobIntent.COMPLETED).exists());
   }
@@ -449,8 +442,8 @@ public class JobWorkerTest {
         .jobType(jobType)
         .handler(
             (c, job) -> {
-              final Map<String, Object> payload = job.getPayloadAsMap();
-              capturedVariables.addAll(payload.keySet());
+              final Map<String, Object> variables = job.getVariablesAsMap();
+              capturedVariables.addAll(variables.keySet());
               latch.countDown();
             })
         .fetchVariables(fetchVariables)
@@ -477,8 +470,8 @@ public class JobWorkerTest {
         .jobType(jobType)
         .handler(
             (c, job) -> {
-              final Map<String, Object> payload = job.getPayloadAsMap();
-              capturedVariables.addAll(payload.keySet());
+              final Map<String, Object> variables = job.getVariablesAsMap();
+              capturedVariables.addAll(variables.keySet());
               latch.countDown();
             })
         .fetchVariables(fetchVariables)

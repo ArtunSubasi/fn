@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.msgpack.mapping;
 
@@ -43,22 +35,6 @@ public class MappingExtractParameterizedTest {
         new Object[][] {
           {
             // source
-            "{}",
-            // mapping
-            createMapping("$", "$"),
-            // expected result
-            "{}"
-          },
-          {
-            // source
-            "{'foo':'bar','int':1,'obj':{'test':'ok'},'array':[1,2,3]}",
-            // mapping
-            createMapping("$", "$"),
-            // expected result
-            "{'foo':'bar','int':1,'obj':{'test':'ok'},'array':[1,2,3]}"
-          },
-          {
-            // source
             "{'foo':'bar','int':1,'obj':{'test':'ok'},'array':[1,2,3]}",
             // mapping
             null,
@@ -69,7 +45,7 @@ public class MappingExtractParameterizedTest {
             // source
             "{'foo':'bar','int':1}",
             // mapping
-            createMapping("$.foo", "$.newFoo"),
+            createMapping("foo", "newFoo"),
             // expected result
             "{'newFoo':'bar'}"
           },
@@ -77,23 +53,7 @@ public class MappingExtractParameterizedTest {
             // source
             "{'foo':'bar','int':1}",
             // mapping
-            createMapping("$[foo]", "$[newFoo]"),
-            // expected result
-            "{'newFoo':'bar'}"
-          },
-          {
-            // source
-            "{'foo':'bar','int':1}",
-            // mapping
-            createMapping("$.foo", "$.newFoo.newDepth.string"),
-            // expected result
-            "{'newFoo':{'newDepth':{'string':'bar'}}}"
-          },
-          {
-            // source
-            "{'foo':'bar','int':1}",
-            // mapping
-            createMapping("$[foo]", "$[newFoo][newDepth][string]"),
+            createMapping("foo", "newFoo.newDepth.string"),
             // expected result
             "{'newFoo':{'newDepth':{'string':'bar'}}}"
           },
@@ -101,7 +61,7 @@ public class MappingExtractParameterizedTest {
             // source
             "{'obj':{'attr':'text'},'int':1}",
             // mapping
-            createMapping("$.obj", "$.newObj"),
+            createMapping("obj", "newObj"),
             // expected result
             "{'newObj':{'attr':'text'}}"
           },
@@ -109,67 +69,15 @@ public class MappingExtractParameterizedTest {
             // source
             "{'array':[1, 2, 3],'int':1}",
             // mapping
-            createMapping("$.array", "$.newArray"),
+            createMapping("array", "newArray"),
             // expected result
             "{'newArray':[1, 2, 3]}"
           },
           {
             // source
-            "{'array':[1, 2, 3],'int':1}",
-            // mapping
-            createMapping("$.array[0]", "$.firstIdxValue"),
-            // expected result
-            "{'firstIdxValue':1}"
-          },
-          {
-            // source
-            "{'array':[1, 2, 3],'int':1}",
-            // mapping
-            createMapping("$.array[1]", "$.array[0]"),
-            // expected result
-            "{'array':[2]}"
-          },
-          {
-            // source
-            "{'array':[1, 2, 3],'int':1}",
-            // mapping
-            createMapping("$[array][1]", "$[array][0]"),
-            // expected result
-            "{'array':[2]}"
-          },
-          {
-            // source
-            "{'array':[1, 2, 3],'int':1}",
-            // mapping
-            createMappings()
-                .mapping("$.array[2]", "$.array[0]")
-                .mapping("$.array[1]", "$.array[1]")
-                .mapping("$.array[0]", "$.array[2]")
-                .build(),
-            // expected result
-            "{'array':[3, 2, 1]}"
-          },
-          {
-            // source
-            "{'array':[1, 2, 3],'int':1}",
-            // mapping
-            createMapping("$.array[1]", "$.array[0].test"),
-            // expected result
-            "{'array':[{'test':2}]}"
-          },
-          {
-            // source
-            "{'array':[{'test':'value'}, 2, 3],'int':1}",
-            // mapping
-            createMapping("$.array[0].test", "$.testValue"),
-            // expected result
-            "{'testValue':'value'}"
-          },
-          {
-            // source
             "{'obj':{'test':'value'},'foo':'bar','array':[{'test':'value'}, 2, 3]}",
             // mapping
-            createMappings().mapping("$.foo", "$.newFoo").mapping("$.obj", "$.newObj").build(),
+            createMappings().mapping("foo", "newFoo").mapping("obj", "newObj").build(),
             // expected result
             "{'newFoo':'bar', 'newObj':{'test':'value'}}"
           },
@@ -178,8 +86,8 @@ public class MappingExtractParameterizedTest {
             "{'obj':{'test':'value'},'foo':'bar','array':[{'test':'value'}, 2, 3]}",
             // mapping
             createMappings()
-                .mapping("$.foo", "$.newDepth.newFoo")
-                .mapping("$.obj", "$.newDepth.newObj")
+                .mapping("foo", "newDepth.newFoo")
+                .mapping("obj", "newDepth.newObj")
                 .build(),
             // expected result
             "{'newDepth':{'newFoo':'bar', 'newObj':{'test':'value'}}}"
@@ -188,7 +96,7 @@ public class MappingExtractParameterizedTest {
             // source
             "{'obj':{'test':'value'},'foo':'bar','array':[{'test':'value'}, 2, 3]}",
             // mapping
-            createMappings().mapping("$.foo", "$.newObj").mapping("$.obj", "$.newObj").build(),
+            createMappings().mapping("foo", "newObj").mapping("obj", "newObj").build(),
             // expected result
             "{'newObj':{'test':'value'}}"
           },
@@ -206,17 +114,9 @@ public class MappingExtractParameterizedTest {
           //            },
           {
             // source
-            "{'array':[[1,2],3,4], 'int':1}",
-            // mapping
-            createMapping("$.array[0]", "$.newArray"),
-            // expected result
-            "{'newArray':[1,2]}"
-          },
-          {
-            // source
             "{'a':{'bb':{'value':'x'}}, 'ab':{'b':{'value':'y'}}}}",
             // mapping
-            createMapping("$.ab.b", "$.value"),
+            createMapping("ab.b", "value"),
             // expected result
             "{'value':{'value':'y'}}"
           },
@@ -229,63 +129,15 @@ public class MappingExtractParameterizedTest {
                             .getResource("largeJsonDocument.json")
                             .toURI()))),
             // mapping
-            createMapping("$.fourth.friends[2].name", "$.name"),
+            createMapping("fourth.favoriteFruit", "favoriteFruit"),
             // expected result
-            "{'name':'Preston Travis'}"
-          },
-          {
-            // source
-            "{'arr':[{'obj':{'value':'x', 'otherArr':[{'test':'hallo'}, {'obj':{'arr':[0, 1]}}]}}, {'otherValue':1}], 'ab':{'b':{'value':'y'}}}",
-            // mapping
-            createMapping("$.arr[0].obj.otherArr[1].obj.arr", "$.objArr"),
-            // expected result
-            "{'objArr':[0, 1]}}"
-          },
-          {
-            // source
-            "{'objArr':[0, 1]}}",
-            // mapping
-            createMapping("$.objArr", "$.arr[0].obj.otherArr[0].obj.arr"),
-            // expected result
-            "{'arr':[{'obj':{'otherArr':[{'obj':{'arr':[0, 1]}}]}}]}"
-          },
-          {
-            // source
-            "{'objArr':[0, 1]}}",
-            // mapping
-            createMapping("$.objArr", "$[arr][0][obj][otherArr][0][obj][arr]"),
-            // expected result
-            "{'arr':[{'obj':{'otherArr':[{'obj':{'arr':[0, 1]}}]}}]}"
+            "{'favoriteFruit':'banana'}"
           },
           {
             // source
             "{'foo':{'bar':1}, 'foo.bar':2}",
             // mapping
-            createMapping("$['foo.bar']", "$.result"),
-            // expected result
-            "{'result':2}"
-          },
-          {
-            // source
-            "{'foo':{'bar':1}, 'foo.bar':2}",
-            // mapping
-            createMapping("$.foo.bar", "$.result"),
-            // expected result
-            "{'result':1}"
-          },
-          {
-            // source
-            "{'foo':{'bar':1}, 'foo.bar':2}",
-            // mapping
-            createMapping("$[foo][bar]", "$.result"),
-            // expected result
-            "{'result':1}"
-          },
-          {
-            // source
-            "{'foo':{'bar':1}, 'foo.bar':2}",
-            // mapping
-            createMapping("$['foo']['bar']", "$.result"),
+            createMapping("foo.bar", "result"),
             // expected result
             "{'result':1}"
           },
@@ -293,7 +145,7 @@ public class MappingExtractParameterizedTest {
             // source
             "{'key':'val'}",
             // mapping
-            createMapping("$.notAKey", "$.key"),
+            createMapping("notAKey", "key"),
             // expected result
             "{'key':null}"
           },
@@ -301,52 +153,27 @@ public class MappingExtractParameterizedTest {
             // source
             "{'key':'val'}",
             // mapping
-            createMapping("$.notAKey", "$.arr", Type.COLLECT),
+            createMapping("notAKey", "arr", Type.COLLECT),
             // expected result
             "{'arr':[null]}"
           },
-          {
-            // source
-            "{'key1':'val1', 'key2': 'val2'}",
-            // mapping
-            createMapping("$.*", "$.newKey", Type.PUT),
-            // expected result
-            "{'newKey': 'val1'}" // selecting the first element
-          },
-          {
-            // source
-            "{'key1':'val1', 'key2': 'val2'}",
-            // mapping
-            createMapping("$.*", "$.newKey", Type.COLLECT),
-            // expected result
-            "{'newKey': ['val1']}" // selecting the first element - collecting all elements would be
-            // nicer
-          },
-          {
-            // source
-            "{'key':'val'}",
-            // mapping
-            createMapping("$.key", "$", Type.PUT),
-            // expected result
-            "{}" // empty object - the best we can reasonably do in this rare case
-          }
         });
   }
 
-  @Parameter public String sourcePayload;
+  @Parameter public String sourceVariables;
 
   @Parameter(1)
   public Mapping[] mappings;
 
   @Parameter(2)
-  public String expectedPayload;
+  public String expectedVariables;
 
   private MsgPackMergeTool mergeTool = new MsgPackMergeTool(1024);
 
   @Test
   public void shouldExtract() throws Throwable {
-    // given payload
-    final byte[] bytes = MSGPACK_MAPPER.writeValueAsBytes(JSON_MAPPER.readTree(sourcePayload));
+    // given variable
+    final byte[] bytes = MSGPACK_MAPPER.writeValueAsBytes(JSON_MAPPER.readTree(sourceVariables));
     final DirectBuffer sourceDocument = new UnsafeBuffer(bytes);
 
     // when
@@ -358,6 +185,6 @@ public class MappingExtractParameterizedTest {
     resultBuffer.getBytes(0, result, 0, result.length);
 
     // then
-    assertThat(MSGPACK_MAPPER.readTree(result)).isEqualTo(JSON_MAPPER.readTree(expectedPayload));
+    assertThat(MSGPACK_MAPPER.readTree(result)).isEqualTo(JSON_MAPPER.readTree(expectedVariables));
   }
 }

@@ -1,23 +1,14 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.test.broker.protocol.brokerapi;
 
-import io.zeebe.protocol.clientapi.ControlMessageRequestDecoder;
-import io.zeebe.protocol.clientapi.ExecuteCommandRequestDecoder;
-import io.zeebe.protocol.clientapi.MessageHeaderDecoder;
+import io.zeebe.protocol.record.ExecuteCommandRequestDecoder;
+import io.zeebe.protocol.record.MessageHeaderDecoder;
 import io.zeebe.test.broker.protocol.MsgPackHelper;
 import io.zeebe.transport.RemoteAddress;
 import io.zeebe.transport.ServerOutput;
@@ -34,12 +25,10 @@ public class StubResponseChannelHandler implements ServerRequestHandler {
 
   protected final MessageHeaderDecoder headerDecoder = new MessageHeaderDecoder();
   protected final List<ResponseStub<ExecuteCommandRequest>> cmdRequestStubs = new ArrayList<>();
-  protected final List<ResponseStub<ControlMessageRequest>> controlMessageStubs = new ArrayList<>();
   protected final MsgPackHelper msgPackHelper;
 
   // can also be used for verification
   protected final List<Object> allRequests = new CopyOnWriteArrayList<>();
-  protected final List<ControlMessageRequest> controlMessageRequests = new CopyOnWriteArrayList<>();
   protected final List<ExecuteCommandRequest> commandRequests = new CopyOnWriteArrayList<>();
 
   protected ServerResponse response = new ServerResponse();
@@ -50,15 +39,6 @@ public class StubResponseChannelHandler implements ServerRequestHandler {
 
   public void addExecuteCommandRequestStub(ResponseStub<ExecuteCommandRequest> stub) {
     cmdRequestStubs.add(0, stub); // add to front such that more recent stubs override older ones
-  }
-
-  public void addControlMessageRequestStub(ResponseStub<ControlMessageRequest> stub) {
-    controlMessageStubs.add(
-        0, stub); // add to front such that more recent stubs override older ones
-  }
-
-  public List<ControlMessageRequest> getReceivedControlMessageRequests() {
-    return controlMessageRequests;
   }
 
   public List<ExecuteCommandRequest> getReceivedCommandRequests() {
@@ -91,16 +71,6 @@ public class StubResponseChannelHandler implements ServerRequestHandler {
       allRequests.add(request);
 
       requestHandled = handleRequest(output, request, cmdRequestStubs, remoteAddress, requestId);
-
-    } else if (ControlMessageRequestDecoder.TEMPLATE_ID == headerDecoder.templateId()) {
-      final ControlMessageRequest request = new ControlMessageRequest(remoteAddress, msgPackHelper);
-
-      request.wrap(copy, 0, length);
-      controlMessageRequests.add(request);
-      allRequests.add(request);
-
-      requestHandled =
-          handleRequest(output, request, controlMessageStubs, remoteAddress, requestId);
     }
 
     if (!requestHandled) {

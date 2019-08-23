@@ -7,13 +7,14 @@
 
   <parent>
     <groupId>io.zeebe</groupId>
-    <artifactId>zb-parent</artifactId>
-    <version>0.15.0-SNAPSHOT</version>
+    <artifactId>zeebe-parent</artifactId>
+    <version>0.20.0</version>
     <relativePath>../parent</relativePath>
   </parent>
 
   <properties>
-    <skip-zbctl>true</skip-zbctl>
+    <zbctl.force>false</zbctl.force>
+    <zbctl.rootDir>${maven.multiModuleProjectDirectory}</zbctl.rootDir>
   </properties>
 
   <dependencies>
@@ -24,7 +25,37 @@
 
     <dependency>
       <groupId>io.zeebe</groupId>
-      <artifactId>zb-elasticsearch-exporter</artifactId>
+      <artifactId>zeebe-gateway</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.zeebe</groupId>
+      <artifactId>zeebe-elasticsearch-exporter</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.zeebe</groupId>
+      <artifactId>zeebe-util</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.zeebe</groupId>
+      <artifactId>atomix-cluster</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.zeebe</groupId>
+      <artifactId>atomix-utils</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.prometheus</groupId>
+      <artifactId>simpleclient_httpserver</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
     </dependency>
 
     <dependency>
@@ -37,7 +68,6 @@
       <artifactId>log4j-core</artifactId>
     </dependency>
   </dependencies>
-
   <build>
     <plugins>
       <plugin>
@@ -97,13 +127,11 @@
             </goals>
             <configuration>
               <target>
-                <exec executable="${maven.multiModuleProjectDirectory}/clients/zbctl/build.sh" osfamily="unix" />
-                <copy file="${maven.multiModuleProjectDirectory}/clients/zbctl/dist/zbctl" tofile="${project.build.directory}/zeebe-broker/bin/zbctl" failonerror="false" />
-                <copy file="${maven.multiModuleProjectDirectory}/clients/zbctl/dist/zbctl.exe" tofile="${project.build.directory}/zeebe-broker/bin/zbctl.exe" failonerror="false" />
-                <copy file="${maven.multiModuleProjectDirectory}/clients/zbctl/dist/zbctl.darwin" tofile="${project.build.directory}/zeebe-broker/bin/zbctl.darwin" failonerror="false" />
-                <chmod dir="${project.build.directory}/zeebe-broker/bin" perm="ugo+rx" includes="zbctl*" />
+                <copy file="${zbctl.rootDir}/clients/zbctl/dist/zbctl" tofile="${project.build.directory}/zeebe-broker/bin/zbctl" failonerror="${zbctl.force}" />
+                <copy file="${zbctl.rootDir}/clients/zbctl/dist/zbctl.exe" tofile="${project.build.directory}/zeebe-broker/bin/zbctl.exe" failonerror="${zbctl.force}" />
+                <copy file="${zbctl.rootDir}/clients/zbctl/dist/zbctl.darwin" tofile="${project.build.directory}/zeebe-broker/bin/zbctl.darwin" failonerror="${zbctl.force}" />
+                <chmod dir="${project.build.directory}/zeebe-broker/bin" perm="ugo+rx" includes="zbctl*" failonerror="${zbctl.force}" />
               </target>
-              <skip>${skip-zbctl}</skip>
             </configuration>
           </execution>
         </executions>
@@ -126,6 +154,17 @@
             </configuration>
           </execution>
         </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <configuration>
+          <!-- dependencies only packaged but not explicitly used -->
+          <usedDependencies>
+            <dependency>io.zeebe:zeebe-elasticsearch-exporter</dependency>
+          </usedDependencies>
+        </configuration>
       </plugin>
     </plugins>
   </build>

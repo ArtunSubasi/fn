@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.transport.impl.actor;
 
@@ -22,8 +14,6 @@ import io.zeebe.transport.impl.TransportChannel;
 import io.zeebe.transport.impl.TransportChannel.ChannelLifecycleListener;
 import io.zeebe.transport.impl.TransportChannelFactory;
 import io.zeebe.transport.impl.TransportContext;
-import io.zeebe.util.metrics.Metric;
-import io.zeebe.util.metrics.MetricsManager;
 import io.zeebe.util.sched.Actor;
 import io.zeebe.util.sched.ActorThread;
 import io.zeebe.util.sched.future.ActorFuture;
@@ -47,8 +37,6 @@ public abstract class Conductor extends Actor implements ChannelLifecycleListene
   protected final AtomicBoolean closing = new AtomicBoolean(false);
   protected final TransportChannelFactory channelFactory;
 
-  private final Metric activeConnectionsMetric;
-
   public Conductor(ActorContext actorContext, TransportContext context) {
     this.actorContext = actorContext;
     this.transportContext = context;
@@ -56,15 +44,6 @@ public abstract class Conductor extends Actor implements ChannelLifecycleListene
     this.channelFactory = context.getChannelFactory();
 
     actorContext.setConductor(this);
-
-    final MetricsManager metricsManager = actorContext.getMetricsManager();
-
-    activeConnectionsMetric =
-        metricsManager
-            .newMetric("transport_active_connections")
-            .type("gauge")
-            .label("transport", transportContext.getName())
-            .create();
   }
 
   public ActorFuture<Void> registerListener(TransportListener channelListener) {
@@ -94,7 +73,6 @@ public abstract class Conductor extends Actor implements ChannelLifecycleListene
   @Override
   public void onChannelConnected(TransportChannel ch) {
     channels.put(ch.getRemoteAddress().getStreamId(), ch);
-    activeConnectionsMetric.incrementOrdered();
 
     final ActorFuture<Void> f1 = actorContext.getReceiver().registerChannel(ch);
     final ActorFuture<Void> f2 = actorContext.getSender().onChannelConnected(ch);
@@ -125,7 +103,6 @@ public abstract class Conductor extends Actor implements ChannelLifecycleListene
     actor.run(
         () -> {
           if (channels.remove(ch.getRemoteAddress().getStreamId()) != null) {
-            activeConnectionsMetric.getAndAddOrdered(-1);
             if (wasConnected) {
               failRequestsOnChannel(ch, "Socket channel has been disconnected");
               final ActorFuture<Void> f1 = actorContext.getReceiver().removeChannel(ch);
@@ -166,7 +143,6 @@ public abstract class Conductor extends Actor implements ChannelLifecycleListene
         Arrays.asList(senderClose, receiverClose),
         (t) -> {
           onSenderAndReceiverClosed();
-          activeConnectionsMetric.close();
         });
   }
 

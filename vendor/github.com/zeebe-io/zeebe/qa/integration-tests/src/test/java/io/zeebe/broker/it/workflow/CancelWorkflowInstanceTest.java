@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.broker.it.workflow;
 
@@ -22,15 +14,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.zeebe.broker.it.GrpcClientRule;
 import io.zeebe.broker.test.EmbeddedBrokerRule;
-import io.zeebe.client.api.events.DeploymentEvent;
-import io.zeebe.client.api.events.WorkflowInstanceEvent;
+import io.zeebe.client.api.command.ClientException;
 import io.zeebe.client.api.response.ActivatedJob;
-import io.zeebe.client.cmd.ClientException;
-import io.zeebe.exporter.record.Record;
-import io.zeebe.exporter.record.value.JobRecordValue;
+import io.zeebe.client.api.response.DeploymentEvent;
+import io.zeebe.client.api.response.WorkflowInstanceEvent;
 import io.zeebe.model.bpmn.Bpmn;
 import io.zeebe.model.bpmn.BpmnModelInstance;
-import io.zeebe.protocol.intent.JobIntent;
+import io.zeebe.protocol.record.Record;
+import io.zeebe.protocol.record.intent.JobIntent;
+import io.zeebe.protocol.record.value.JobRecordValue;
 import io.zeebe.test.util.TestUtil;
 import io.zeebe.test.util.record.RecordingExporter;
 import org.junit.Before;
@@ -109,7 +101,7 @@ public class CancelWorkflowInstanceTest {
                         .getClient()
                         .newActivateJobsCommand()
                         .jobType("test")
-                        .amount(1)
+                        .maxJobsToActivate(1)
                         .send()
                         .join())
             .until(response -> !response.getJobs().isEmpty())
@@ -151,15 +143,15 @@ public class CancelWorkflowInstanceTest {
         RecordingExporter.jobRecords().withType("test").getFirst();
 
     // when - then
-    final long elementInstanceKey = record.getValue().getHeaders().getElementInstanceKey();
+    final long elementInstanceKey = record.getValue().getElementInstanceKey();
     assertThatThrownBy(
             () -> {
               clientRule.getClient().newCancelInstanceCommand(elementInstanceKey).send().join();
             })
         .isInstanceOf(ClientException.class)
         .hasMessageContaining(
-            "Expected to find a workflow instance with key "
+            "Expected to cancel a workflow instance with key '"
                 + elementInstanceKey
-                + " to cancel, but found a child element instance which cannot be canceled.");
+                + "', but no such workflow was found");
   }
 }

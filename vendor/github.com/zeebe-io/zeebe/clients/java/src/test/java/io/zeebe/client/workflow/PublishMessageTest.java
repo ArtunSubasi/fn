@@ -15,12 +15,12 @@
  */
 package io.zeebe.client.workflow;
 
-import static io.zeebe.test.util.JsonUtil.fromJsonAsMap;
+import static io.zeebe.client.util.JsonUtil.fromJsonAsMap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.entry;
 
-import io.zeebe.client.cmd.ClientException;
+import io.zeebe.client.api.command.ClientException;
 import io.zeebe.client.util.ClientTest;
 import io.zeebe.gateway.protocol.GatewayOuterClass.PublishMessageRequest;
 import java.io.ByteArrayInputStream;
@@ -49,78 +49,81 @@ public class PublishMessageTest extends ClientTest {
     assertThat(request.getCorrelationKey()).isEqualTo("key");
     assertThat(request.getMessageId()).isEqualTo("theId");
     assertThat(request.getTimeToLive()).isEqualTo(Duration.ofDays(1).toMillis());
+
+    rule.verifyDefaultRequestTimeout();
   }
 
   @Test
-  public void shouldPublishMessageWithStringPayload() {
+  public void shouldPublishMessageWithStringVariables() {
     // when
     client
         .newPublishMessageCommand()
         .messageName("name")
         .correlationKey("key")
-        .payload("{\"foo\":\"bar\"}")
+        .variables("{\"foo\":\"bar\"}")
         .send()
         .join();
 
     // then
     final PublishMessageRequest request = gatewayService.getLastRequest();
-    assertThat(fromJsonAsMap(request.getPayload())).contains(entry("foo", "bar"));
+    assertThat(fromJsonAsMap(request.getVariables())).contains(entry("foo", "bar"));
   }
 
   @Test
-  public void shouldPublishMessageWithInputStreamPayload() {
+  public void shouldPublishMessageWithInputStreamVariables() {
     // given
-    final String payload = "{\"foo\":\"bar\"}";
-    final ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(payload.getBytes());
+    final String variables = "{\"foo\":\"bar\"}";
+    final ByteArrayInputStream byteArrayInputStream =
+        new ByteArrayInputStream(variables.getBytes());
 
     // when
     client
         .newPublishMessageCommand()
         .messageName("name")
         .correlationKey("key")
-        .payload(byteArrayInputStream)
+        .variables(byteArrayInputStream)
         .send()
         .join();
 
     // then
     final PublishMessageRequest request = gatewayService.getLastRequest();
-    assertThat(fromJsonAsMap(request.getPayload())).contains(entry("foo", "bar"));
+    assertThat(fromJsonAsMap(request.getVariables())).contains(entry("foo", "bar"));
   }
 
   @Test
-  public void shouldPublishMessageWithMapPayload() {
+  public void shouldPublishMessageWithMapVariables() {
     // given
-    final Map<String, Object> payload = new HashMap<>();
-    payload.put("foo", "bar");
+    final Map<String, Object> variables = new HashMap<>();
+    variables.put("foo", "bar");
 
     // when
     client
         .newPublishMessageCommand()
         .messageName("name")
         .correlationKey("key")
-        .payload(payload)
+        .variables(variables)
         .send()
         .join();
 
     // then
     final PublishMessageRequest request = gatewayService.getLastRequest();
-    assertThat(fromJsonAsMap(request.getPayload())).contains(entry("foo", "bar"));
+    assertThat(fromJsonAsMap(request.getVariables())).contains(entry("foo", "bar"));
   }
 
   @Test
-  public void shouldPublishMessageWithObjectPayload() {
+  public void shouldPublishMessageWithObjectVariables() {
     // when
     client
         .newPublishMessageCommand()
         .messageName("name")
         .correlationKey("key")
-        .payload(new Payload())
+        .variables(new Variables())
         .send()
         .join();
 
     // then
     final PublishMessageRequest request = gatewayService.getLastRequest();
-    assertThat(fromJsonAsMap(request.getPayload())).contains(entry("foo", "bar"));
+    assertThat(fromJsonAsMap(request.getVariables())).contains(entry("foo", "bar"));
   }
 
   @Test
@@ -143,11 +146,29 @@ public class PublishMessageTest extends ClientTest {
         .hasMessageContaining("Invalid request");
   }
 
-  public static class Payload {
+  @Test
+  public void shouldSetRequestTimeout() {
+    // given
+    final Duration requestTimeout = Duration.ofHours(124);
+
+    // when
+    client
+        .newPublishMessageCommand()
+        .messageName("test")
+        .correlationKey("test")
+        .requestTimeout(requestTimeout)
+        .send()
+        .join();
+
+    // then
+    rule.verifyRequestTimeout(requestTimeout);
+  }
+
+  public static class Variables {
 
     private final String foo = "bar";
 
-    Payload() {}
+    Variables() {}
 
     public String getFoo() {
       return foo;

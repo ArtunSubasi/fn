@@ -15,7 +15,7 @@
  */
 package io.zeebe.client;
 
-import io.zeebe.client.api.subscription.JobWorkerBuilderStep1.JobWorkerBuilderStep3;
+import io.zeebe.client.api.worker.JobWorkerBuilderStep1.JobWorkerBuilderStep3;
 import java.time.Duration;
 import java.util.Properties;
 
@@ -37,10 +37,10 @@ public interface ZeebeClientBuilder {
   ZeebeClientBuilder brokerContactPoint(String contactPoint);
 
   /**
-   * @param numberOfJobs Default value for {@link JobWorkerBuilderStep3#bufferSize(int)}. Default
-   *     value is 32.
+   * @param maxJobsActive Default value for {@link JobWorkerBuilderStep3#maxJobsActive(int)}.
+   *     Default value is 32.
    */
-  ZeebeClientBuilder defaultJobWorkerBufferSize(int numberOfJobs);
+  ZeebeClientBuilder defaultJobWorkerMaxJobsActive(int maxJobsActive);
 
   /**
    * @param numThreads The number of threads for invocation of job workers. Setting this value to 0
@@ -64,6 +64,9 @@ public interface ZeebeClientBuilder {
 
   /** The time-to-live which is used when none is provided for a message. Default is 1 hour. */
   ZeebeClientBuilder defaultMessageTimeToLive(Duration timeToLive);
+
+  /** The request timeout used if not overridden by the command. Default is 20 seconds. */
+  ZeebeClientBuilder defaultRequestTimeout(Duration requestTimeout);
 
   /** @return a new {@link ZeebeClient} with the provided configuration options. */
   ZeebeClient build();

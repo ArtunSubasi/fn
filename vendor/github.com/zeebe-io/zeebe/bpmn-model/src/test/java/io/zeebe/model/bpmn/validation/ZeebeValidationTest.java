@@ -21,9 +21,8 @@ import static java.util.Collections.singletonList;
 import io.zeebe.model.bpmn.Bpmn;
 import io.zeebe.model.bpmn.builder.AbstractCatchEventBuilder;
 import io.zeebe.model.bpmn.instance.CompensateEventDefinition;
+import io.zeebe.model.bpmn.instance.EndEvent;
 import io.zeebe.model.bpmn.instance.IntermediateCatchEvent;
-import io.zeebe.model.bpmn.instance.zeebe.ZeebeIoMapping;
-import io.zeebe.model.bpmn.instance.zeebe.ZeebeOutputBehavior;
 import java.util.Arrays;
 import org.junit.runners.Parameterized.Parameters;
 
@@ -54,6 +53,17 @@ public class ZeebeValidationTest extends AbstractZeebeValidationTest {
       {
         Bpmn.createExecutableProcess("process")
             .startEvent()
+            .endEvent()
+            .serviceTask("task", tb -> tb.zeebeTaskType("task"))
+            .done(),
+        singletonList(
+            expect(
+                EndEvent.class,
+                "End events must not have outgoing sequence flows to other elements."))
+      },
+      {
+        Bpmn.createExecutableProcess("process")
+            .startEvent()
             .intermediateCatchEvent()
             .endEvent()
             .done(),
@@ -70,20 +80,6 @@ public class ZeebeValidationTest extends AbstractZeebeValidationTest {
             expect(
                 CompensateEventDefinition.class, "Event definition of this type is not supported"),
             expect(IntermediateCatchEvent.class, "Event definition must be one of: message, timer"))
-      },
-      {
-        Bpmn.createExecutableProcess("process")
-            .startEvent()
-            .serviceTask("task")
-            .zeebeTaskType("foo")
-            .zeebeOutputBehavior(ZeebeOutputBehavior.none)
-            .zeebeOutput("source", "target")
-            .endEvent()
-            .done(),
-        singletonList(
-            expect(
-                ZeebeIoMapping.class,
-                "Output behavior 'none' cannot be used in combination without zeebe:output elements"))
       },
       {
         Bpmn.createExecutableProcess("process")

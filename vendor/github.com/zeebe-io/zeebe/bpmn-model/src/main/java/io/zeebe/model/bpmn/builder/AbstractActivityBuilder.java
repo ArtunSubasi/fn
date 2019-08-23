@@ -25,7 +25,6 @@ import io.zeebe.model.bpmn.instance.dc.Bounds;
 import io.zeebe.model.bpmn.instance.zeebe.ZeebeInput;
 import io.zeebe.model.bpmn.instance.zeebe.ZeebeIoMapping;
 import io.zeebe.model.bpmn.instance.zeebe.ZeebeOutput;
-import io.zeebe.model.bpmn.instance.zeebe.ZeebeOutputBehavior;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
@@ -34,7 +33,7 @@ import java.util.function.Consumer;
 /** @author Sebastian Menski */
 public abstract class AbstractActivityBuilder<
         B extends AbstractActivityBuilder<B, E>, E extends Activity>
-    extends AbstractFlowNodeBuilder<B, E> implements ZeebePayloadMappingBuilder<B> {
+    extends AbstractFlowNodeBuilder<B, E> implements ZeebeVariablesMappingBuilder<B> {
 
   protected AbstractActivityBuilder(BpmnModelInstance modelInstance, E element, Class<?> selfType) {
     super(modelInstance, element, selfType);
@@ -132,14 +131,6 @@ public abstract class AbstractActivityBuilder<
 
     boundaryBounds.setX(x);
     boundaryBounds.setY(y);
-  }
-
-  @Override
-  public B zeebeOutputBehavior(ZeebeOutputBehavior outputBehavior) {
-    final ZeebeIoMapping ioMapping = getCreateSingleExtensionElement(ZeebeIoMapping.class);
-    ioMapping.setOutputBehavhior(outputBehavior);
-
-    return myself;
   }
 
   @Override

@@ -1,60 +1,86 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.protocol.impl.record.value.message;
 
-import io.zeebe.msgpack.UnpackedObject;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.zeebe.msgpack.property.DocumentProperty;
 import io.zeebe.msgpack.property.LongProperty;
 import io.zeebe.msgpack.property.StringProperty;
+import io.zeebe.protocol.impl.encoding.MsgPackConverter;
+import io.zeebe.protocol.impl.record.UnifiedRecordValue;
+import io.zeebe.protocol.record.value.MessageRecordValue;
+import io.zeebe.util.buffer.BufferUtil;
+import java.util.Map;
 import org.agrona.DirectBuffer;
 
-public class MessageRecord extends UnpackedObject {
+public class MessageRecord extends UnifiedRecordValue implements MessageRecordValue {
 
   private final StringProperty nameProp = new StringProperty("name");
   private final StringProperty correlationKeyProp = new StringProperty("correlationKey");
   // TTL in milliseconds
   private final LongProperty timeToLiveProp = new LongProperty("timeToLive");
-
-  private final DocumentProperty payloadProp = new DocumentProperty("payload");
+  private final DocumentProperty variablesProp = new DocumentProperty("variables");
   private final StringProperty messageIdProp = new StringProperty("messageId", "");
 
   public MessageRecord() {
     this.declareProperty(nameProp)
         .declareProperty(correlationKeyProp)
         .declareProperty(timeToLiveProp)
-        .declareProperty(payloadProp)
+        .declareProperty(variablesProp)
         .declareProperty(messageIdProp);
   }
 
-  public DirectBuffer getName() {
+  public boolean hasMessageId() {
+    return messageIdProp.getValue().capacity() > 0;
+  }
+
+  @JsonIgnore
+  public DirectBuffer getCorrelationKeyBuffer() {
+    return correlationKeyProp.getValue();
+  }
+
+  @JsonIgnore
+  public DirectBuffer getMessageIdBuffer() {
+    return messageIdProp.getValue();
+  }
+
+  @Override
+  public String getName() {
+    return BufferUtil.bufferAsString(nameProp.getValue());
+  }
+
+  @Override
+  public String getCorrelationKey() {
+    return BufferUtil.bufferAsString(correlationKeyProp.getValue());
+  }
+
+  @Override
+  public String getMessageId() {
+    return BufferUtil.bufferAsString(messageIdProp.getValue());
+  }
+
+  public long getTimeToLive() {
+    return timeToLiveProp.getValue();
+  }
+
+  @JsonIgnore
+  public DirectBuffer getNameBuffer() {
     return nameProp.getValue();
   }
 
-  public MessageRecord setName(String name) {
-    nameProp.setValue(name);
-    return this;
+  @Override
+  public Map<String, Object> getVariables() {
+    return MsgPackConverter.convertToMap(variablesProp.getValue());
   }
 
-  public MessageRecord setName(DirectBuffer name) {
-    nameProp.setValue(name);
-    return this;
-  }
-
-  public DirectBuffer getCorrelationKey() {
-    return correlationKeyProp.getValue();
+  @JsonIgnore
+  public DirectBuffer getVariablesBuffer() {
+    return variablesProp.getValue();
   }
 
   public MessageRecord setCorrelationKey(String correlationKey) {
@@ -67,23 +93,6 @@ public class MessageRecord extends UnpackedObject {
     return this;
   }
 
-  public DirectBuffer getPayload() {
-    return payloadProp.getValue();
-  }
-
-  public MessageRecord setPayload(DirectBuffer payload) {
-    payloadProp.setValue(payload);
-    return this;
-  }
-
-  public boolean hasMessageId() {
-    return messageIdProp.getValue().capacity() > 0;
-  }
-
-  public DirectBuffer getMessageId() {
-    return messageIdProp.getValue();
-  }
-
   public MessageRecord setMessageId(String messageId) {
     messageIdProp.setValue(messageId);
     return this;
@@ -94,12 +103,23 @@ public class MessageRecord extends UnpackedObject {
     return this;
   }
 
-  public long getTimeToLive() {
-    return timeToLiveProp.getValue();
+  public MessageRecord setName(String name) {
+    nameProp.setValue(name);
+    return this;
+  }
+
+  public MessageRecord setName(DirectBuffer name) {
+    nameProp.setValue(name);
+    return this;
   }
 
   public MessageRecord setTimeToLive(long timeToLive) {
     timeToLiveProp.setValue(timeToLive);
+    return this;
+  }
+
+  public MessageRecord setVariables(DirectBuffer variables) {
+    variablesProp.setValue(variables);
     return this;
   }
 }

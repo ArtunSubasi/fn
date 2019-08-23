@@ -1,19 +1,15 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.exporter;
+
+import io.zeebe.protocol.record.Record;
+import io.zeebe.protocol.record.RecordType;
+import io.zeebe.protocol.record.ValueType;
 
 public class ElasticsearchExporterConfiguration {
 
@@ -22,6 +18,7 @@ public class ElasticsearchExporterConfiguration {
 
   public IndexConfiguration index = new IndexConfiguration();
   public BulkConfiguration bulk = new BulkConfiguration();
+  public AuthenticationConfiguration authentication = new AuthenticationConfiguration();
 
   @Override
   public String toString() {
@@ -33,6 +30,8 @@ public class ElasticsearchExporterConfiguration {
         + index
         + ", bulk="
         + bulk
+        + ", authentication="
+        + authentication
         + '}';
   }
 
@@ -50,13 +49,16 @@ public class ElasticsearchExporterConfiguration {
 
     // value types to export
     public boolean deployment = true;
+    public boolean error = true;
     public boolean incident = true;
     public boolean job = true;
     public boolean jobBatch = false;
     public boolean message = false;
     public boolean messageSubscription = false;
-    public boolean raft = false;
+    public boolean variable = true;
+    public boolean variableDocument = false;
     public boolean workflowInstance = true;
+    public boolean workflowInstanceCreation = false;
     public boolean workflowInstanceSubscription = false;
 
     @Override
@@ -73,6 +75,8 @@ public class ElasticsearchExporterConfiguration {
           + event
           + ", rejection="
           + rejection
+          + ", error="
+          + error
           + ", deployment="
           + deployment
           + ", incident="
@@ -83,10 +87,14 @@ public class ElasticsearchExporterConfiguration {
           + message
           + ", messageSubscription="
           + messageSubscription
-          + ", raft="
-          + raft
+          + ", variable="
+          + variable
+          + ", variableDocument="
+          + variableDocument
           + ", workflowInstance="
           + workflowInstance
+          + ", workflowInstanceCreation="
+          + workflowInstanceCreation
           + ", workflowInstanceSubscription="
           + workflowInstanceSubscription
           + '}';
@@ -102,6 +110,69 @@ public class ElasticsearchExporterConfiguration {
     @Override
     public String toString() {
       return "BulkConfiguration{" + "delay=" + delay + ", size=" + size + '}';
+    }
+  }
+
+  public static class AuthenticationConfiguration {
+    public String username;
+    public String password;
+
+    public boolean isPresent() {
+      return (username != null && !username.isEmpty()) && (password != null && !password.isEmpty());
+    }
+
+    @Override
+    public String toString() {
+      return "AuthenticationConfiguration{" + "username='" + username + '\'' + '}';
+    }
+  }
+
+  public boolean shouldIndexRecord(Record<?> record) {
+    return shouldIndexRecordType(record.getRecordType())
+        && shouldIndexValueType(record.getValueType());
+  }
+
+  public boolean shouldIndexValueType(ValueType valueType) {
+    switch (valueType) {
+      case DEPLOYMENT:
+        return index.deployment;
+      case ERROR:
+        return index.error;
+      case INCIDENT:
+        return index.incident;
+      case JOB:
+        return index.job;
+      case JOB_BATCH:
+        return index.jobBatch;
+      case MESSAGE:
+        return index.message;
+      case MESSAGE_SUBSCRIPTION:
+        return index.messageSubscription;
+      case VARIABLE:
+        return index.variable;
+      case VARIABLE_DOCUMENT:
+        return index.variableDocument;
+      case WORKFLOW_INSTANCE:
+        return index.workflowInstance;
+      case WORKFLOW_INSTANCE_CREATION:
+        return index.workflowInstanceCreation;
+      case WORKFLOW_INSTANCE_SUBSCRIPTION:
+        return index.workflowInstanceSubscription;
+      default:
+        return false;
+    }
+  }
+
+  public boolean shouldIndexRecordType(RecordType recordType) {
+    switch (recordType) {
+      case EVENT:
+        return index.event;
+      case COMMAND:
+        return index.command;
+      case COMMAND_REJECTION:
+        return index.rejection;
+      default:
+        return false;
     }
   }
 }

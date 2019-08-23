@@ -1,26 +1,17 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.example;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.zeebe.example.cluster.TopologyViewer;
-import io.zeebe.example.data.HandlePayloadAsPojo;
+import io.zeebe.example.data.HandleVariablesAsPojo;
 import io.zeebe.example.job.JobWorkerCreator;
-import io.zeebe.example.workflow.DeploymentViewer;
 import io.zeebe.example.workflow.NonBlockingWorkflowInstanceCreator;
 import io.zeebe.example.workflow.WorkflowDeployer;
 import io.zeebe.example.workflow.WorkflowInstanceCreator;
@@ -40,14 +31,13 @@ public class DocsConsistencyTest {
         new Object[][] {
           {TopologyViewer.class, "io.zeebe.example.cluster.TopologyViewer"},
           {JobWorkerCreator.class, "io.zeebe.example.job.JobWorkerCreator"},
-          {DeploymentViewer.class, "io.zeebe.example.workflow.DeploymentViewer"},
           {
             NonBlockingWorkflowInstanceCreator.class,
             "io.zeebe.example.workflow.NonBlockingWorkflowInstanceCreator"
           },
           {WorkflowDeployer.class, "io.zeebe.example.workflow.WorkflowDeployer"},
           {WorkflowInstanceCreator.class, "io.zeebe.example.workflow.WorkflowInstanceCreator"},
-          {HandlePayloadAsPojo.class, "io.zeebe.example.data.HandlePayloadAsPojo"},
+          {HandleVariablesAsPojo.class, "io.zeebe.example.data.HandleVariablesAsPojo"},
         });
   }
 

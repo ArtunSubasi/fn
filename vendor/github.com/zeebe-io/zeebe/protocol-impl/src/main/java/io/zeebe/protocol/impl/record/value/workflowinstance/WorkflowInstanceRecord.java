@@ -1,38 +1,34 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.protocol.impl.record.value.workflowinstance;
 
-import io.zeebe.msgpack.UnpackedObject;
-import io.zeebe.msgpack.property.DocumentProperty;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import io.zeebe.msgpack.property.EnumProperty;
 import io.zeebe.msgpack.property.IntegerProperty;
 import io.zeebe.msgpack.property.LongProperty;
 import io.zeebe.msgpack.property.StringProperty;
-import io.zeebe.msgpack.spec.MsgPackHelper;
+import io.zeebe.protocol.impl.record.UnifiedRecordValue;
+import io.zeebe.protocol.record.value.BpmnElementType;
+import io.zeebe.protocol.record.value.WorkflowInstanceRecordValue;
+import io.zeebe.protocol.record.value.WorkflowInstanceRelated;
+import io.zeebe.util.buffer.BufferUtil;
 import org.agrona.DirectBuffer;
-import org.agrona.concurrent.UnsafeBuffer;
 
-public class WorkflowInstanceRecord extends UnpackedObject {
-  public static final DirectBuffer EMPTY_PAYLOAD = new UnsafeBuffer(MsgPackHelper.EMTPY_OBJECT);
+public class WorkflowInstanceRecord extends UnifiedRecordValue
+    implements WorkflowInstanceRelated, WorkflowInstanceRecordValue {
 
   public static final String PROP_WORKFLOW_BPMN_PROCESS_ID = "bpmnProcessId";
   public static final String PROP_WORKFLOW_INSTANCE_KEY = "workflowInstanceKey";
   public static final String PROP_WORKFLOW_ELEMENT_ID = "elementId";
   public static final String PROP_WORKFLOW_VERSION = "version";
   public static final String PROP_WORKFLOW_KEY = "workflowKey";
-  public static final String PROP_WORKFLOW_PAYLOAD = "payload";
+  public static final String PROP_WORKFLOW_BPMN_TYPE = "bpmnElementType";
+  public static final String PROP_WORKFLOW_SCOPE_KEY = "flowScopeKey";
 
   private final StringProperty bpmnProcessIdProp =
       new StringProperty(PROP_WORKFLOW_BPMN_PROCESS_ID, "");
@@ -43,9 +39,11 @@ public class WorkflowInstanceRecord extends UnpackedObject {
       new LongProperty(PROP_WORKFLOW_INSTANCE_KEY, -1L);
   private final StringProperty elementIdProp = new StringProperty(PROP_WORKFLOW_ELEMENT_ID, "");
 
-  private final DocumentProperty payloadProp = new DocumentProperty(PROP_WORKFLOW_PAYLOAD);
+  private final LongProperty flowScopeKeyProp = new LongProperty(PROP_WORKFLOW_SCOPE_KEY, -1L);
 
-  private final LongProperty scopeInstanceKey = new LongProperty("scopeInstanceKey", -1L);
+  private final EnumProperty<BpmnElementType> bpmnElementTypeProp =
+      new EnumProperty<>(
+          PROP_WORKFLOW_BPMN_TYPE, BpmnElementType.class, BpmnElementType.UNSPECIFIED);
 
   public WorkflowInstanceRecord() {
     this.declareProperty(bpmnProcessIdProp)
@@ -53,12 +51,70 @@ public class WorkflowInstanceRecord extends UnpackedObject {
         .declareProperty(workflowKeyProp)
         .declareProperty(workflowInstanceKeyProp)
         .declareProperty(elementIdProp)
-        .declareProperty(payloadProp)
-        .declareProperty(scopeInstanceKey);
+        .declareProperty(flowScopeKeyProp)
+        .declareProperty(bpmnElementTypeProp);
   }
 
-  public DirectBuffer getBpmnProcessId() {
+  public void wrap(WorkflowInstanceRecord record) {
+    elementIdProp.setValue(record.getElementIdBuffer());
+    bpmnProcessIdProp.setValue(record.getBpmnProcessIdBuffer());
+    flowScopeKeyProp.setValue(record.getFlowScopeKey());
+    versionProp.setValue(record.getVersion());
+    workflowKeyProp.setValue(record.getWorkflowKey());
+    workflowInstanceKeyProp.setValue(record.getWorkflowInstanceKey());
+    bpmnElementTypeProp.setValue(record.getBpmnElementType());
+  }
+
+  @JsonIgnore
+  public DirectBuffer getBpmnProcessIdBuffer() {
     return bpmnProcessIdProp.getValue();
+  }
+
+  @JsonIgnore
+  public DirectBuffer getElementIdBuffer() {
+    return elementIdProp.getValue();
+  }
+
+  @Override
+  public long getWorkflowInstanceKey() {
+    return workflowInstanceKeyProp.getValue();
+  }
+
+  public WorkflowInstanceRecord setBpmnProcessId(
+      DirectBuffer directBuffer, int offset, int length) {
+    bpmnProcessIdProp.setValue(directBuffer, offset, length);
+    return this;
+  }
+
+  @Override
+  public String getBpmnProcessId() {
+    return BufferUtil.bufferAsString(bpmnProcessIdProp.getValue());
+  }
+
+  public int getVersion() {
+    return versionProp.getValue();
+  }
+
+  public long getWorkflowKey() {
+    return workflowKeyProp.getValue();
+  }
+
+  @Override
+  public String getElementId() {
+    return BufferUtil.bufferAsString(elementIdProp.getValue());
+  }
+
+  public long getFlowScopeKey() {
+    return flowScopeKeyProp.getValue();
+  }
+
+  public BpmnElementType getBpmnElementType() {
+    return bpmnElementTypeProp.getValue();
+  }
+
+  public WorkflowInstanceRecord setBpmnElementType(BpmnElementType bpmnType) {
+    bpmnElementTypeProp.setValue(bpmnType);
+    return this;
   }
 
   public WorkflowInstanceRecord setBpmnProcessId(String bpmnProcessId) {
@@ -69,16 +125,6 @@ public class WorkflowInstanceRecord extends UnpackedObject {
   public WorkflowInstanceRecord setBpmnProcessId(DirectBuffer directBuffer) {
     bpmnProcessIdProp.setValue(directBuffer);
     return this;
-  }
-
-  public WorkflowInstanceRecord setBpmnProcessId(
-      DirectBuffer directBuffer, int offset, int length) {
-    bpmnProcessIdProp.setValue(directBuffer, offset, length);
-    return this;
-  }
-
-  public DirectBuffer getElementId() {
-    return elementIdProp.getValue();
   }
 
   public WorkflowInstanceRecord setElementId(String elementId) {
@@ -95,26 +141,9 @@ public class WorkflowInstanceRecord extends UnpackedObject {
     return this;
   }
 
-  public long getWorkflowInstanceKey() {
-    return workflowInstanceKeyProp.getValue();
-  }
-
-  public WorkflowInstanceRecord setWorkflowInstanceKey(long workflowInstanceKey) {
-    this.workflowInstanceKeyProp.setValue(workflowInstanceKey);
+  public WorkflowInstanceRecord setFlowScopeKey(long flowScopeKey) {
+    this.flowScopeKeyProp.setValue(flowScopeKey);
     return this;
-  }
-
-  public long getScopeInstanceKey() {
-    return scopeInstanceKey.getValue();
-  }
-
-  public WorkflowInstanceRecord setScopeInstanceKey(long scopeInstanceKey) {
-    this.scopeInstanceKey.setValue(scopeInstanceKey);
-    return this;
-  }
-
-  public int getVersion() {
-    return versionProp.getValue();
   }
 
   public WorkflowInstanceRecord setVersion(int version) {
@@ -122,36 +151,13 @@ public class WorkflowInstanceRecord extends UnpackedObject {
     return this;
   }
 
-  public long getWorkflowKey() {
-    return workflowKeyProp.getValue();
+  public WorkflowInstanceRecord setWorkflowInstanceKey(long workflowInstanceKey) {
+    this.workflowInstanceKeyProp.setValue(workflowInstanceKey);
+    return this;
   }
 
   public WorkflowInstanceRecord setWorkflowKey(long workflowKey) {
     this.workflowKeyProp.setValue(workflowKey);
     return this;
-  }
-
-  public DirectBuffer getPayload() {
-    return payloadProp.getValue();
-  }
-
-  public WorkflowInstanceRecord setPayload(DirectBuffer payload) {
-    payloadProp.setValue(payload);
-    return this;
-  }
-
-  public WorkflowInstanceRecord setPayload(DirectBuffer payload, int offset, int length) {
-    payloadProp.setValue(payload, offset, length);
-    return this;
-  }
-
-  public void wrap(WorkflowInstanceRecord record) {
-    elementIdProp.setValue(record.getElementId());
-    bpmnProcessIdProp.setValue(record.getBpmnProcessId());
-    payloadProp.setValue(record.getPayload());
-    scopeInstanceKey.setValue(record.getScopeInstanceKey());
-    versionProp.setValue(record.getVersion());
-    workflowKeyProp.setValue(record.getWorkflowKey());
-    workflowInstanceKeyProp.setValue(record.getWorkflowInstanceKey());
   }
 }

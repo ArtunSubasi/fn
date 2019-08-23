@@ -1,16 +1,16 @@
 # Setting up a Zeebe Cluster
 
-To setup a cluster you need to adjust the `cluster` section
-in the Zeebe configuration file. Below is a snipped
-of the default Zeebe configuration file, it should be self explanatory.
+To set up a cluster you need to adjust the `cluster` section
+in the Zeebe configuration file. Below is a snippet
+of the default Zeebe configuration file, it should be self-explanatory.
 
 ```toml
 [cluster]
 
-# This section contains all cluster related configurations, to setup an zeebe cluster
+# This section contains all cluster related configurations, to set up a Zeebe cluster
 
 # Specifies the unique id of this broker node in a cluster.
-# The id should be between 0 and number of nodes in the cluster (exclusive).
+# The id should be between 0 and the number of nodes in the cluster (exclusive).
 #
 # This setting can also be overridden using the environment variable ZEEBE_NODE_ID.
 # nodeId = 0
@@ -26,7 +26,7 @@ of the default Zeebe configuration file, it should be self explanatory.
 # This can also be overridden using the environment variable ZEEBE_REPLICATION_FACTOR.
 # replicationFactor = 1
 
-# Specifies the zeebe cluster size. This value is used to determine which broker
+# Specifies the Zeebe cluster size. This value is used to determine which broker
 # is responsible for which partition.
 #
 # This can also be overridden using the environment variable ZEEBE_CLUSTER_SIZE.
@@ -41,16 +41,19 @@ of the default Zeebe configuration file, it should be self explanatory.
 # This setting can also be overridden using the environment variable ZEEBE_CONTACT_POINTS
 # specifying a comma-separated list of contact points.
 #
+# To guarantee the cluster can survive network partitions, all nodes must be specified
+# as initial contact points.
+#
 # Default is empty list:
 # initialContactPoints = []
 ```
 
 # Example
 
-In this example we will setup an Zeebe cluster with
-five brokers. Each broker needs to get an unique node id.
+In this example, we will set up a Zeebe cluster with
+five brokers. Each broker needs to get a unique node id.
 To scale well, we will bootstrap five partitions
-with an replication factor of three. For more information about this,
+with a replication factor of three. For more information about this,
 please take a look into the [Clustering](/basics/clustering.html) section.
 
 The clustering setup will look like this:
@@ -66,6 +69,13 @@ nodeId = 0
 partitionsCount = 5
 replicationFactor = 3
 clusterSize = 5
+initialContactPoints = [
+  ADDRESS_AND_PORT_OF_NODE_0,
+  ADDRESS_AND_PORT_OF_NODE_1,
+  ADDRESS_AND_PORT_OF_NODE_2,
+  ADDRESS_AND_PORT_OF_NODE_3,
+  ADDRESS_AND_PORT_OF_NODE_4
+]
 ```
 
 For the other brokers the configuration will slightly change.
@@ -75,28 +85,33 @@ nodeId = NODE_ID
 partitionsCount = 5
 replicationFactor = 3
 clusterSize = 5
-initialContactPoints = [ ADDRESS_AND_PORT_OF_NODE_0]
+initialContactPoints = [
+  ADDRESS_AND_PORT_OF_NODE_0,
+  ADDRESS_AND_PORT_OF_NODE_1,
+  ADDRESS_AND_PORT_OF_NODE_2,
+  ADDRESS_AND_PORT_OF_NODE_3,
+  ADDRESS_AND_PORT_OF_NODE_4
+]
 ```
 
-Each broker needs an unique node id. The ids should be in range of
+Each broker needs a unique node id. The ids should be in the range of
 zero and `clusterSize - 1`. You need to replace the `NODE_ID` placeholder with an
-appropriate value. Furthermore the
-brokers needs an initial contact point to start there gossip
+appropriate value. Furthermore, the
+brokers need an initial contact point to start their gossip
 conversation. Make sure that you use the address and
 **management port** of another broker. You need to replace the
 `ADDRESS_AND_PORT_OF_NODE_0` placeholder.
 
-It is not necessary that each broker has the first
-node as initial contact point, but it is easier
-for the configuration. You could also configure more
-brokers as initial contact points, to make sure that
-the bootstrapping works without any problems.
+To guarantee that a cluster can properly recover from network partitions,
+it is currently required that all nodes be specified as initial contact points. It is not necessary
+for a broker to list itself as initial contact point, but it is safe to do so, and probably simpler
+to maintain.
 
 ## Partitions bootstrapping
 
-On bootstrap, each node will create an partition matrix.
+On bootstrap, each node will create a partition matrix.
 
-These matrix depends on the partitions count, replication factor and
+This matrix depends on the partitions count, replication factor and
 the cluster size. If you did the configuration right and
 used the same values for `partitionsCount`, `replicationFactor`
 and `clusterSize` on each node, then all nodes will generate
@@ -167,7 +182,7 @@ For the current example the matrix will look like the following:
 </table>
 
 The matrix ensures that the partitions are well distributed
-between the different nodes. Furthermore it guarantees that
-each node knows exactly, which partitions he has
-to bootstrap and for which he will become leader as first (this
-could change later, if he needs to step down for example).
+between the different nodes. Furthermore, it guarantees that
+each node knows exactly, which partitions it has
+to bootstrap and for which it will become the leader at first (this
+could change later, if the node needs to step down for example).

@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.gateway.impl.job;
 
@@ -42,7 +34,7 @@ public class ActivateJobsHandler {
     activateJobs(
         RequestMapper.toActivateJobsRequest(request),
         partitionIdIteratorForType(request.getType(), partitionsCount),
-        request.getAmount(),
+        request.getMaxJobsToActivate(),
         request.getType(),
         responseObserver);
   }
@@ -53,10 +45,26 @@ public class ActivateJobsHandler {
       int remainingAmount,
       String jobType,
       StreamObserver<ActivateJobsResponse> responseObserver) {
-    if (remainingAmount > 0 && partitionIdIterator.hasNext()) {
+    activateJobs(request, partitionIdIterator, remainingAmount, jobType, responseObserver, false);
+  }
+
+  private void activateJobs(
+      BrokerActivateJobsRequest request,
+      PartitionIdIterator partitionIdIterator,
+      int remainingAmount,
+      String jobType,
+      StreamObserver<ActivateJobsResponse> responseObserver,
+      boolean pollPrevPartition) {
+
+    if (remainingAmount > 0 && (pollPrevPartition || partitionIdIterator.hasNext())) {
+      final int partitionId =
+          pollPrevPartition
+              ? partitionIdIterator.getCurrentPartitionId()
+              : partitionIdIterator.next();
+
       // partitions to check and jobs to activate left
-      request.setPartitionId(partitionIdIterator.next());
-      request.setAmount(remainingAmount);
+      request.setPartitionId(partitionId);
+      request.setMaxJobsToActivate(remainingAmount);
       brokerClient.sendRequest(
           request,
           (key, response) -> {
@@ -66,12 +74,14 @@ public class ActivateJobsHandler {
             if (jobsCount > 0) {
               responseObserver.onNext(grpcResponse);
             }
+
             activateJobs(
                 request,
                 partitionIdIterator,
                 remainingAmount - jobsCount,
                 jobType,
-                responseObserver);
+                responseObserver,
+                response.getTruncated());
           },
           error -> {
             Loggers.GATEWAY_LOGGER.warn(
@@ -83,7 +93,7 @@ public class ActivateJobsHandler {
           });
     } else {
       // enough jobs activated or no more partitions left to check
-      jobTypeToNextPartitionId.put(jobType, partitionIdIterator.getCurrentPartitionId() + 1);
+      jobTypeToNextPartitionId.put(jobType, partitionIdIterator.getCurrentPartitionId());
       responseObserver.onCompleted();
     }
   }

@@ -1,25 +1,17 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.protocol.impl.encoding;
 
-import io.zeebe.protocol.clientapi.ErrorCode;
-import io.zeebe.protocol.clientapi.ErrorResponseDecoder;
-import io.zeebe.protocol.clientapi.ErrorResponseEncoder;
-import io.zeebe.protocol.clientapi.MessageHeaderDecoder;
-import io.zeebe.protocol.clientapi.MessageHeaderEncoder;
+import io.zeebe.protocol.record.ErrorCode;
+import io.zeebe.protocol.record.ErrorResponseDecoder;
+import io.zeebe.protocol.record.ErrorResponseEncoder;
+import io.zeebe.protocol.record.MessageHeaderDecoder;
+import io.zeebe.protocol.record.MessageHeaderEncoder;
 import io.zeebe.util.buffer.BufferReader;
 import io.zeebe.util.buffer.BufferWriter;
 import org.agrona.DirectBuffer;
@@ -64,6 +56,17 @@ public class ErrorResponse implements BufferWriter, BufferReader {
   public ErrorResponse setErrorData(DirectBuffer errorData) {
     this.errorData.wrap(errorData, 0, errorData.capacity());
     return this;
+  }
+
+  public boolean tryWrap(DirectBuffer buffer) {
+    return tryWrap(buffer, 0, buffer.capacity());
+  }
+
+  public boolean tryWrap(DirectBuffer buffer, int offset, int length) {
+    headerDecoder.wrap(buffer, offset);
+
+    return headerDecoder.schemaId() == bodyDecoder.sbeSchemaId()
+        && headerDecoder.templateId() == bodyDecoder.sbeTemplateId();
   }
 
   @Override
@@ -121,5 +124,12 @@ public class ErrorResponse implements BufferWriter, BufferReader {
         .wrap(buffer, offset)
         .errorCode(errorCode)
         .putErrorData(errorData, 0, errorData.capacity());
+  }
+
+  public byte[] toBytes() {
+    final byte[] bytes = new byte[getLength()];
+    final MutableDirectBuffer buffer = new UnsafeBuffer(bytes);
+    write(buffer, 0);
+    return bytes;
   }
 }

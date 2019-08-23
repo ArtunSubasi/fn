@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.util.sched.testing;
 
@@ -27,7 +19,6 @@ import io.zeebe.util.sched.clock.ActorClock;
 import io.zeebe.util.sched.clock.ControlledActorClock;
 import io.zeebe.util.sched.future.ActorFuture;
 import io.zeebe.util.sched.future.CompletableActorFuture;
-import io.zeebe.util.sched.metrics.ActorThreadMetrics;
 import java.time.Duration;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -58,7 +49,7 @@ public class ControlledActorSchedulerRule extends ExternalResource {
   }
 
   @Override
-  protected void before() throws Throwable {
+  protected void before() {
     actorScheduler.start();
   }
 
@@ -92,30 +83,32 @@ public class ControlledActorSchedulerRule extends ExternalResource {
     controlledActorTaskRunner.workUntilDone();
   }
 
-  public void waitForTimer(final Duration timeToWait) {
-    clock.addTime(timeToWait);
-    workUntilDone();
-  }
-
   public <T> ActorFuture<T> call(Callable<T> callable) {
     final ActorFuture<T> future = new CompletableActorFuture<>();
-
-    submitActor(
-        new Actor() {
-          @Override
-          protected void onActorStarted() {
-            actor.run(
-                () -> {
-                  try {
-                    future.complete(callable.call());
-                  } catch (Exception e) {
-                    future.completeExceptionally(e);
-                  }
-                });
-          }
-        });
-
+    submitActor(new CallingActor(future, callable));
     return future;
+  }
+
+  static class CallingActor<T> extends Actor {
+    private final ActorFuture<T> future;
+    private final Callable<T> callable;
+
+    CallingActor(ActorFuture<T> future, Callable<T> callable) {
+      this.future = future;
+      this.callable = callable;
+    }
+
+    @Override
+    protected void onActorStarted() {
+      actor.run(
+          () -> {
+            try {
+              future.complete(callable.call());
+            } catch (Exception e) {
+              future.completeExceptionally(e);
+            }
+          });
+    }
   }
 
   static class ControlledActorThreadFactory implements ActorThreadFactory {
@@ -128,11 +121,9 @@ public class ControlledActorSchedulerRule extends ExternalResource {
         ActorThreadGroup threadGroup,
         TaskScheduler taskScheduler,
         ActorClock clock,
-        ActorThreadMetrics metrics,
         ActorTimerQueue timerQueue) {
       controlledThread =
-          new ControlledActorThread(
-              name, id, threadGroup, taskScheduler, clock, metrics, timerQueue);
+          new ControlledActorThread(name, id, threadGroup, taskScheduler, clock, timerQueue);
       return controlledThread;
     }
   }

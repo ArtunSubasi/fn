@@ -1,27 +1,16 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.util.sched;
 
-import io.zeebe.util.metrics.MetricsManager;
 import io.zeebe.util.sched.clock.ActorClock;
 import io.zeebe.util.sched.future.ActorFuture;
-import io.zeebe.util.sched.metrics.ActorThreadMetrics;
-import java.io.IOException;
-import java.io.PrintStream;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.concurrent.Future;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
@@ -29,47 +18,23 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import org.agrona.ExpandableArrayBuffer;
 
 public class ActorScheduler {
   private final AtomicReference<SchedulerState> state = new AtomicReference<>();
   private final ActorExecutor actorTaskExecutor;
-  private final MetricsManager metricsManager;
-  private final String schedulerName;
 
   public ActorScheduler(ActorSchedulerBuilder builder) {
     state.set(SchedulerState.NEW);
     actorTaskExecutor = builder.getActorExecutor();
-    metricsManager = builder.getMetricsManager();
-    schedulerName = builder.getSchedulerName();
   }
 
   /**
    * Submits an non-blocking, CPU-bound actor.
    *
    * @param actor the actor to submit
-   * @param collectTaskMetrics controls whether metrics should be written for this actor. This has
-   *     the overhead cost (time & memory) for allocating the counters which are used to record the
-   *     metrics. Generally, metrics should not be recorded for short-lived tasks but only make
-   *     sense for long-lived tasks where a small overhead when initially submitting the actor is
-   *     acceptable.
    */
   public ActorFuture<Void> submitActor(Actor actor) {
-    return submitActor(actor, false);
-  }
-
-  /**
-   * Submits an non-blocking, CPU-bound actor.
-   *
-   * @param actor the actor to submit
-   * @param collectTaskMetrics controls whether metrics should be written for this actor. This has
-   *     the overhead cost (time & memory) for allocating the counters which are used to record the
-   *     metrics. Generally, metrics should not be recorded for short-lived tasks but only make
-   *     sense for long-lived tasks where a small overhead when initially submitting the actor is
-   *     acceptable.
-   */
-  public ActorFuture<Void> submitActor(Actor actor, boolean collectTaskMetrics) {
-    return actorTaskExecutor.submitCpuBound(actor.actor.task, collectTaskMetrics);
+    return actorTaskExecutor.submitCpuBound(actor.actor.task);
   }
 
   /**
@@ -87,23 +52,17 @@ public class ActorScheduler {
    * Scheduling hints can be created using the {@link SchedulingHints} class.
    *
    * @param actor the actor to submit
-   * @param collectTaskMetrics controls whether metrics should be written for this actor. This has
-   *     the overhead cost (time & memory) for allocating the counters which are used to record the
-   *     metrics. Generally, metrics should not be recorded for short-lived tasks but only make
-   *     sense for long-lived tasks where a small overhead when initially submitting the actor is
-   *     acceptable.
    * @param schedulingHints additional scheduling hint
    */
-  public ActorFuture<Void> submitActor(
-      Actor actor, boolean collectTaskMetrics, int schedulingHints) {
+  public ActorFuture<Void> submitActor(Actor actor, int schedulingHints) {
     final ActorTask task = actor.actor.task;
 
     final ActorFuture<Void> startingFuture;
     if (SchedulingHints.isCpuBound(schedulingHints)) {
       task.setPriority(SchedulingHints.getPriority(schedulingHints));
-      startingFuture = actorTaskExecutor.submitCpuBound(task, collectTaskMetrics);
+      startingFuture = actorTaskExecutor.submitCpuBound(task);
     } else {
-      startingFuture = actorTaskExecutor.submitIoBoundTask(task, collectTaskMetrics);
+      startingFuture = actorTaskExecutor.submitIoBoundTask(task);
     }
     return startingFuture;
   }
@@ -130,17 +89,6 @@ public class ActorScheduler {
     }
   }
 
-  public void dumpMetrics(PrintStream ps) {
-    final ExpandableArrayBuffer buff = new ExpandableArrayBuffer();
-    metricsManager.dump(buff, 0, System.currentTimeMillis());
-
-    try {
-      ps.write(buff.byteArray());
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
-  }
-
   public void setBlockingTasksShutdownTime(Duration shutdownTime) {
     actorTaskExecutor.setBlockingTasksShutdownTime(shutdownTime);
   }
@@ -156,15 +104,13 @@ public class ActorScheduler {
   public static class ActorSchedulerBuilder {
     private String schedulerName = "";
     private ActorClock actorClock;
-    private MetricsManager metricsManager;
 
     private int cpuBoundThreadsCount = Math.max(1, Runtime.getRuntime().availableProcessors() - 2);
     private ActorThreadGroup cpuBoundActorGroup;
-    private double[] priorityQuotas = new double[] {0.60, 0.30, 0.10};
+    private final double[] priorityQuotas = new double[] {0.60, 0.30, 0.10};
 
     private int ioBoundThreadsCount = 2;
     private ActorThreadGroup ioBoundActorGroup;
-    private int[] ioDeviceConcurrency = new int[] {2};
 
     private ActorThreadFactory actorThreadFactory;
     private ThreadPoolExecutor blockingTasksRunner;
@@ -183,11 +129,6 @@ public class ActorScheduler {
       return this;
     }
 
-    public ActorSchedulerBuilder setMetricsManager(MetricsManager metricsManager) {
-      this.metricsManager = metricsManager;
-      return this;
-    }
-
     public ActorSchedulerBuilder setCpuBoundActorThreadCount(int actorThreadCount) {
       this.cpuBoundThreadsCount = actorThreadCount;
       return this;
@@ -198,33 +139,13 @@ public class ActorScheduler {
       return this;
     }
 
-    public ActorSchedulerBuilder setPriorityQuotas(double[] priorityQuotas) {
-      this.priorityQuotas = priorityQuotas;
-      return this;
-    }
-
     public ActorSchedulerBuilder setActorThreadFactory(ActorThreadFactory actorThreadFactory) {
       this.actorThreadFactory = actorThreadFactory;
       return this;
     }
 
-    public ActorSchedulerBuilder setBlockingTasksRunner(ThreadPoolExecutor blockingTasksRunner) {
-      this.blockingTasksRunner = blockingTasksRunner;
-      return this;
-    }
-
     public ActorSchedulerBuilder setBlockingTasksShutdownTime(Duration blockingTasksShutdownTime) {
       this.blockingTasksShutdownTime = blockingTasksShutdownTime;
-      return this;
-    }
-
-    public ActorSchedulerBuilder setActorExecutor(ActorExecutor actorExecutor) {
-      this.actorExecutor = actorExecutor;
-      return this;
-    }
-
-    public ActorSchedulerBuilder setIoDeviceConcurrency(int[] ioDeviceConcurrency) {
-      this.ioDeviceConcurrency = ioDeviceConcurrency;
       return this;
     }
 
@@ -245,10 +166,6 @@ public class ActorScheduler {
       return actorTimerQueue;
     }
 
-    public MetricsManager getMetricsManager() {
-      return metricsManager;
-    }
-
     public int getCpuBoundActorThreadCount() {
       return cpuBoundThreadsCount;
     }
@@ -258,7 +175,7 @@ public class ActorScheduler {
     }
 
     public double[] getPriorityQuotas() {
-      return priorityQuotas;
+      return Arrays.copyOf(priorityQuotas, priorityQuotas.length);
     }
 
     public ActorThreadFactory getActorThreadFactory() {
@@ -277,22 +194,12 @@ public class ActorScheduler {
       return actorExecutor;
     }
 
-    public int[] getIoDeviceConcurrency() {
-      return ioDeviceConcurrency;
-    }
-
     public ActorThreadGroup getCpuBoundActorThreads() {
       return cpuBoundActorGroup;
     }
 
     public ActorThreadGroup getIoBoundActorThreads() {
       return ioBoundActorGroup;
-    }
-
-    private void initMetricsManager() {
-      if (metricsManager == null) {
-        metricsManager = new MetricsManager();
-      }
     }
 
     private void initActorThreadFactory() {
@@ -333,7 +240,6 @@ public class ActorScheduler {
     }
 
     public ActorScheduler build() {
-      initMetricsManager();
       initActorThreadFactory();
       initBlockingTaskRunner();
       initCpuBoundActorThreadGroup();
@@ -350,7 +256,6 @@ public class ActorScheduler {
         ActorThreadGroup threadGroup,
         TaskScheduler taskScheduler,
         ActorClock clock,
-        ActorThreadMetrics metrics,
         ActorTimerQueue timerQueue);
   }
 
@@ -362,9 +267,8 @@ public class ActorScheduler {
         ActorThreadGroup threadGroup,
         TaskScheduler taskScheduler,
         ActorClock clock,
-        ActorThreadMetrics metrics,
         ActorTimerQueue timerQueue) {
-      return new ActorThread(name, id, threadGroup, taskScheduler, clock, metrics, timerQueue);
+      return new ActorThread(name, id, threadGroup, taskScheduler, clock, timerQueue);
     }
   }
 
@@ -390,9 +294,5 @@ public class ActorScheduler {
     RUNNING,
     TERMINATING,
     TERMINATED // scheduler is not reusable
-  }
-
-  public MetricsManager getMetricsManager() {
-    return metricsManager;
   }
 }

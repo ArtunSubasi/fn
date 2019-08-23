@@ -22,8 +22,8 @@ func JobHandler(fnZeebe *FnTriggerWithZeebeJobType, loadBalancerHost string) wor
         // TODO refactor: extract function invocation as a separate function, also extract other functions =)
         invocationUrl := loadBalancerHost + "/t/" + fnZeebe.appName + fnZeebe.triggerSource
         logrus.Infoln("Invoking function", fnZeebe.fnID, "/ InvocationUrl:", invocationUrl)
-        logrus.Debugln("Payload:", job.Payload)
-        resp, err := http.Post(invocationUrl, "application/json", bytes.NewBuffer([]byte(job.Payload)))
+        logrus.Debugln("Variables:", job.Variables)
+        resp, err := http.Post(invocationUrl, "application/json", bytes.NewBuffer([]byte(job.Variables)))
         if err != nil {
             logrus.Errorf("Failed to send the post request for job key %v / error: %v", jobKey, err)
             failJob(client, job, "Failed to invoke Fn function " + fnZeebe.fnID)
@@ -63,7 +63,7 @@ func JobHandler(fnZeebe *FnTriggerWithZeebeJobType, loadBalancerHost string) wor
             logrus.Debugln("Response:", responseJsonObject)
         }
 
-        request, err := client.NewCompleteJobCommand().JobKey(jobKey).PayloadFromObject(responseJsonObject) 
+        request, err := client.NewCompleteJobCommand().JobKey(jobKey).VariablesFromObject(responseJsonObject) 
         if err != nil {
             logrus.Errorf("Failed to set the updated payload. Failing job. Job key: %v / fnID: %v", jobKey, fnZeebe.fnID)
             failJob(client, job, "Failed to set to updated payload")

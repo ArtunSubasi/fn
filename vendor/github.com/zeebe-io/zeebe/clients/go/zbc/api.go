@@ -28,7 +28,7 @@ type ZBClient interface {
 
 	NewCreateInstanceCommand() commands.CreateInstanceCommandStep1
 	NewCancelInstanceCommand() commands.CancelInstanceStep1
-	NewUpdatePayloadCommand() commands.UpdatePayloadCommandStep1
+	NewSetVariablesCommand() commands.SetVariablesCommandStep1
 	NewResolveIncidentCommand() commands.ResolveIncidentCommandStep1
 
 	NewPublishMessageCommand() commands.PublishMessageCommandStep1
@@ -37,9 +37,6 @@ type ZBClient interface {
 	NewCompleteJobCommand() commands.CompleteJobCommandStep1
 	NewFailJobCommand() commands.FailJobCommandStep1
 	NewUpdateJobRetriesCommand() commands.UpdateJobRetriesCommandStep1
-
-	NewListWorkflowsCommand() commands.ListWorkflowsStep1
-	NewGetWorkflowCommand() commands.GetWorkflowStep1
 
 	NewJobWorker() worker.JobWorkerBuilderStep1
 

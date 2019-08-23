@@ -15,24 +15,42 @@
  */
 package io.zeebe.client;
 
-import io.zeebe.client.api.clients.JobClient;
-import io.zeebe.client.api.commands.ActivateJobsCommandStep1;
-import io.zeebe.client.api.commands.CancelWorkflowInstanceCommandStep1;
-import io.zeebe.client.api.commands.CreateWorkflowInstanceCommandStep1;
-import io.zeebe.client.api.commands.DeployWorkflowCommandStep1;
-import io.zeebe.client.api.commands.PublishMessageCommandStep1;
-import io.zeebe.client.api.commands.ResolveIncidentCommandStep1;
-import io.zeebe.client.api.commands.TopologyRequestStep1;
-import io.zeebe.client.api.commands.UpdatePayloadWorkflowInstanceCommandStep1;
-import io.zeebe.client.api.commands.UpdateRetriesJobCommandStep1;
-import io.zeebe.client.api.commands.WorkflowRequestStep1;
-import io.zeebe.client.api.commands.WorkflowResourceRequestStep1;
-import io.zeebe.client.api.subscription.JobWorkerBuilderStep1;
+import io.zeebe.client.api.command.ActivateJobsCommandStep1;
+import io.zeebe.client.api.command.CancelWorkflowInstanceCommandStep1;
+import io.zeebe.client.api.command.CreateWorkflowInstanceCommandStep1;
+import io.zeebe.client.api.command.DeployWorkflowCommandStep1;
+import io.zeebe.client.api.command.PublishMessageCommandStep1;
+import io.zeebe.client.api.command.ResolveIncidentCommandStep1;
+import io.zeebe.client.api.command.SetVariablesCommandStep1;
+import io.zeebe.client.api.command.TopologyRequestStep1;
+import io.zeebe.client.api.command.UpdateRetriesJobCommandStep1;
+import io.zeebe.client.api.worker.JobClient;
+import io.zeebe.client.api.worker.JobWorkerBuilderStep1;
 import io.zeebe.client.impl.ZeebeClientBuilderImpl;
 import io.zeebe.client.impl.ZeebeClientImpl;
 
 /** The client to communicate with a Zeebe broker/cluster. */
 public interface ZeebeClient extends AutoCloseable, JobClient {
+
+  /**
+   * @return a new Zeebe client with default configuration values. In order to customize
+   *     configuration, use the methods {@link #newClientBuilder()} or {@link
+   *     #newClient(ZeebeClientConfiguration)}. See {@link ZeebeClientBuilder} for the configuration
+   *     options and default values.
+   */
+  static ZeebeClient newClient() {
+    return newClientBuilder().build();
+  }
+
+  /** @return a new {@link ZeebeClient} using the provided configuration. */
+  static ZeebeClient newClient(final ZeebeClientConfiguration configuration) {
+    return new ZeebeClientImpl(configuration);
+  }
+
+  /** @return a builder to configure and create a new {@link ZeebeClient}. */
+  static ZeebeClientBuilder newClientBuilder() {
+    return new ZeebeClientBuilderImpl();
+  }
 
   /**
    * Request the current cluster topology. Can be used to inspect which brokers are available at
@@ -56,26 +74,6 @@ public interface ZeebeClient extends AutoCloseable, JobClient {
 
   /** @return the client's configuration */
   ZeebeClientConfiguration getConfiguration();
-
-  /**
-   * @return a new Zeebe client with default configuration values. In order to customize
-   *     configuration, use the methods {@link #newClientBuilder()} or {@link
-   *     #newClient(ZeebeClientConfiguration)}. See {@link ZeebeClientBuilder} for the configuration
-   *     options and default values.
-   */
-  static ZeebeClient newClient() {
-    return newClientBuilder().build();
-  }
-
-  /** @return a new {@link ZeebeClient} using the provided configuration. */
-  static ZeebeClient newClient(final ZeebeClientConfiguration configuration) {
-    return new ZeebeClientImpl(configuration);
-  }
-
-  /** @return a builder to configure and create a new {@link ZeebeClient}. */
-  static ZeebeClientBuilder newClientBuilder() {
-    return new ZeebeClientBuilderImpl();
-  }
 
   @Override
   void close();
@@ -103,7 +101,7 @@ public interface ZeebeClient extends AutoCloseable, JobClient {
    *  .newCreateInstanceCommand()
    *  .bpmnProcessId("my-process")
    *  .latestVersion()
-   *  .payload(json)
+   *  .variables(json)
    *  .send();
    * </pre>
    *
@@ -126,19 +124,20 @@ public interface ZeebeClient extends AutoCloseable, JobClient {
   CancelWorkflowInstanceCommandStep1 newCancelInstanceCommand(long workflowInstanceKey);
 
   /**
-   * Command to update the payload of a workflow instance.
+   * Command to set and/or update the variables of a given flow element (e.g. workflow instance,
+   * task, etc.)
    *
    * <pre>
    * zeebeClient
-   *  .newUpdatePayloadCommand(elementInstanceKey)
-   *  .payload(json)
+   *  .newSetVariablesCommand(elementInstanceKey)
+   *  .variables(json)
    *  .send();
    * </pre>
    *
-   * @param elementInstanceKey the key of the element instance to update the payload for
+   * @param elementInstanceKey the key of the element instance to set/update the variables for
    * @return a builder for the command
    */
-  UpdatePayloadWorkflowInstanceCommandStep1 newUpdatePayloadCommand(long elementInstanceKey);
+  SetVariablesCommandStep1 newSetVariablesCommand(long elementInstanceKey);
 
   /**
    * Command to publish a message which can be correlated to a workflow instance.
@@ -148,52 +147,13 @@ public interface ZeebeClient extends AutoCloseable, JobClient {
    *  .newPublishMessageCommand()
    *  .messageName("order canceled")
    *  .correlationKey(orderId)
-   *  .payload(json)
+   *  .variables(json)
    *  .send();
    * </pre>
    *
    * @return a builder for the command
    */
   PublishMessageCommandStep1 newPublishMessageCommand();
-
-  /**
-   * Request to get the resource of a workflow (i.e. the XML representation).
-   *
-   * <pre>
-   * WorkflowResource resource = zeebeClient
-   *  .newResourceRequest()
-   *  .bpmnProcessId("my-process")
-   *  .lastestVersion()
-   *  .send()
-   *  .join();
-   *
-   * String bpmnXml = resoure.getBpmnXml();
-   * </pre>
-   *
-   * @return a builder of the request
-   */
-  WorkflowResourceRequestStep1 newResourceRequest();
-
-  /**
-   * Request to get all deployed workflows.
-   *
-   * <pre>
-   * List&#60;Workflow&#62; workflows = zeebeClient
-   *  .newWorkflowRequest()
-   *  .send()
-   *  .join()
-   *  .getWorkflows();
-   *
-   * String bpmnProcessId = workflow.getBpmnProcessId();
-   * </pre>
-   *
-   * The response does not contain the resources of the workflows. Use {@link #newResourceRequest()}
-   * to get the resource of a workflow.
-   *
-   * @see #newResourceRequest()
-   * @return a builder of the request
-   */
-  WorkflowRequestStep1 newWorkflowRequest();
 
   /**
    * Command to resolve an existing incident.
@@ -222,7 +182,8 @@ public interface ZeebeClient extends AutoCloseable, JobClient {
    * </pre>
    *
    * <p>If the given retries are greater than zero then this job will be picked up again by a job
-   * subscription and a related incident will be marked as resolved.
+   * worker. This will not close a related incident, which still has to be marked as resolved with
+   * {@link #newResolveIncidentCommand newResolveIncidentCommand(long incidentKey)} .
    *
    * @param jobKey the key of the job to update
    * @return a builder for the command
@@ -255,13 +216,13 @@ public interface ZeebeClient extends AutoCloseable, JobClient {
    *   &#64;Override
    *   public void handle(JobClient client, JobEvent jobEvent)
    *   {
-   *     String json = jobEvent.getPayload();
-   *     // modify payload
+   *     String json = jobEvent.getVariables();
+   *     // modify variables
    *
    *     client
    *      .newCompleteCommand()
    *      .event(jobEvent)
-   *      .payload(json)
+   *      .variables(json)
    *      .send();
    *   }
    * };
@@ -278,15 +239,15 @@ public interface ZeebeClient extends AutoCloseable, JobClient {
    * zeebeClient
    *  .newActivateJobsCommand()
    *  .jobType("payment")
-   *  .amount(10)
+   *  .maxJobsToActivate(10)
    *  .workerName("paymentWorker")
    *  .timeout(Duration.ofMinutes(10))
    *  .send();
    * </pre>
    *
-   * <p>The command will try to activate maximal {@code amount} jobs of given {@code jobType}. If
-   * less then {@code amount} jobs of the {@code jobType} are available for activation the returned
-   * list will have fewer elements.
+   * <p>The command will try to use {@code maxJobsToActivate} for given {@code jobType}. If less
+   * then the requested {@code maxJobsToActivate} jobs of the {@code jobType} are available for
+   * activation the returned list will have fewer elements.
    *
    * @return a builder for the command
    */

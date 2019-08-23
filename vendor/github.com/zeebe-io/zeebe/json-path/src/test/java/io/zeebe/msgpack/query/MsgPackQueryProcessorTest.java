@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.msgpack.query;
 
@@ -35,7 +27,7 @@ public class MsgPackQueryProcessorTest {
 
   @Test
   public void shouldBeEmpty() {
-    final QueryResults results = processor.process(path("$.foo"), EMPTY_DOCUMENT);
+    final QueryResults results = processor.process(path("foo"), EMPTY_DOCUMENT);
 
     assertThat(results.size()).isEqualTo(0);
   }
@@ -44,7 +36,7 @@ public class MsgPackQueryProcessorTest {
   public void shouldGetSingleResultString() {
     final QueryResults results =
         processor.process(
-            path("$.foo"),
+            path("foo"),
             encodeMsgPack(
                 p -> {
                   p.packMapHeader(1);
@@ -63,7 +55,7 @@ public class MsgPackQueryProcessorTest {
   public void shouldGetSingleResultLongAsString() {
     final QueryResults results =
         processor.process(
-            path("$.foo"),
+            path("foo"),
             encodeMsgPack(
                 p -> {
                   p.packMapHeader(1);
@@ -81,7 +73,7 @@ public class MsgPackQueryProcessorTest {
 
   @Test
   public void shouldThrowExceptionIfEmpty() {
-    final QueryResults results = processor.process(path("$.foo"), EMPTY_DOCUMENT);
+    final QueryResults results = processor.process(path("foo"), EMPTY_DOCUMENT);
 
     assertThatThrownBy(() -> results.getSingleResult())
         .isInstanceOf(RuntimeException.class)
@@ -89,27 +81,10 @@ public class MsgPackQueryProcessorTest {
   }
 
   @Test
-  public void shouldThrowExceptionIfNotSingleResult() {
-    final QueryResults results =
-        processor.process(
-            path("$.*"),
-            encodeMsgPack(
-                p -> {
-                  p.packMapHeader(2);
-                  p.packString("x").packInt(0);
-                  p.packString("y").packInt(1);
-                }));
-
-    assertThatThrownBy(() -> results.getSingleResult())
-        .isInstanceOf(RuntimeException.class)
-        .hasMessage("found more than one result");
-  }
-
-  @Test
   public void shouldThrowExceptionIfNotString() {
     final QueryResults results =
         processor.process(
-            path("$.foo"),
+            path("foo"),
             encodeMsgPack(
                 p -> {
                   p.packMapHeader(1);
@@ -127,7 +102,7 @@ public class MsgPackQueryProcessorTest {
   public void shouldThrowExceptionIfNotLong() {
     final QueryResults results =
         processor.process(
-            path("$.foo"),
+            path("foo"),
             encodeMsgPack(
                 p -> {
                   p.packMapHeader(1);

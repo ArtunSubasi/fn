@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.servicecontainer.impl;
 
@@ -30,7 +22,6 @@ import io.zeebe.servicecontainer.ServiceStopContext;
 import io.zeebe.util.sched.ActorScheduler;
 import io.zeebe.util.sched.future.ActorFuture;
 import io.zeebe.util.sched.testing.ControlledActorSchedulerRule;
-import java.util.concurrent.ExecutionException;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -112,28 +103,7 @@ public class ServiceStartContextTest {
   }
 
   @Test
-  public void shouldNotRemoveServiceIfNotCreatedFromContext() {
-    final MockService mockService1 = new MockService();
-    final Service<Object> mockService2 = mock(Service.class);
-
-    serviceContainer.createService(service1, mockService1).install();
-    actorSchedulerRule.workUntilDone();
-
-    serviceContainer.createService(service2, mockService2).install();
-    actorSchedulerRule.workUntilDone();
-
-    final ActorFuture<Void> future = mockService1.startContext.removeService(service2);
-    actorSchedulerRule.workUntilDone();
-
-    thrown.expect(ExecutionException.class);
-    thrown.expectMessage(
-        "Cannot remove service 'service2' from context 'service1'. Can only remove dependencies and services started through this context.");
-
-    future.join();
-  }
-
-  @Test
-  public void shouldNotRemoveServiceIfNotExist() {
+  public void shouldNotFailOnRemoveServiceIfNotExist() {
     final MockService mockService1 = new MockService();
 
     serviceContainer.createService(service1, mockService1).install();
@@ -141,10 +111,6 @@ public class ServiceStartContextTest {
 
     final ActorFuture<Void> removeService = mockService1.startContext.removeService(service2);
     actorSchedulerRule.workUntilDone();
-
-    thrown.expect(ExecutionException.class);
-    thrown.expectMessage(
-        "Cannot remove service 'service2' from context 'service1'. Can only remove dependencies and services started through this context.");
 
     removeService.join();
   }

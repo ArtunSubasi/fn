@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.logstreams.log;
 
@@ -27,12 +19,18 @@ import org.agrona.DirectBuffer;
 public interface LogStreamBatchWriter extends LogStreamWriter {
   /** Builder to add a log entry to the batch. */
   interface LogEntryBuilder {
-    /** Use the log entry position as key. */
-    LogEntryBuilder positionAsKey();
     /** Use the default values as key. */
     LogEntryBuilder keyNull();
+
     /** Set the log entry key. */
     LogEntryBuilder key(long key);
+
+    /**
+     * Can be used if command and event, which is caused by this command is written in batch.
+     *
+     * @param index the index in this batch
+     */
+    LogEntryBuilder sourceIndex(int index);
 
     /** Set the log entry metadata. */
     LogEntryBuilder metadata(DirectBuffer buffer, int offset, int length);
@@ -61,9 +59,6 @@ public interface LogStreamBatchWriter extends LogStreamWriter {
 
   /** Set the source event for all log entries. */
   LogStreamBatchWriter sourceRecordPosition(long position);
-
-  /** Set the producer id for all log entries. */
-  LogStreamBatchWriter producerId(int producerId);
 
   /** Returns the builder to add a new log entry to the batch. */
   LogEntryBuilder event();

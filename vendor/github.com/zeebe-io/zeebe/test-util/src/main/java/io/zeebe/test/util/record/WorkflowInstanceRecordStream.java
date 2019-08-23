@@ -1,28 +1,20 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.test.util.record;
 
-import io.zeebe.exporter.record.Record;
-import io.zeebe.exporter.record.value.WorkflowInstanceRecordValue;
-import io.zeebe.protocol.intent.WorkflowInstanceIntent;
+import io.zeebe.protocol.record.Record;
+import io.zeebe.protocol.record.intent.WorkflowInstanceIntent;
+import io.zeebe.protocol.record.value.BpmnElementType;
+import io.zeebe.protocol.record.value.WorkflowInstanceRecordValue;
 import java.util.stream.Stream;
 
 public class WorkflowInstanceRecordStream
-    extends ExporterRecordWithPayloadStream<
-        WorkflowInstanceRecordValue, WorkflowInstanceRecordStream> {
+    extends ExporterRecordStream<WorkflowInstanceRecordValue, WorkflowInstanceRecordStream> {
 
   public WorkflowInstanceRecordStream(final Stream<Record<WorkflowInstanceRecordValue>> stream) {
     super(stream);
@@ -54,15 +46,26 @@ public class WorkflowInstanceRecordStream
     return valueFilter(v -> elementId.equals(v.getElementId()));
   }
 
-  public WorkflowInstanceRecordStream withScopeInstanceKey(final long scopeInstanceKey) {
-    return valueFilter(v -> v.getScopeInstanceKey() == scopeInstanceKey);
+  public WorkflowInstanceRecordStream withFlowScopeKey(final long flowScopeKey) {
+    return valueFilter(v -> v.getFlowScopeKey() == flowScopeKey);
   }
 
   public WorkflowInstanceRecordStream limitToWorkflowInstanceCompleted() {
     return limit(
         r ->
-            r.getMetadata().getIntent() == WorkflowInstanceIntent.ELEMENT_COMPLETED
+            r.getIntent() == WorkflowInstanceIntent.ELEMENT_COMPLETED
                 && r.getKey() == r.getValue().getWorkflowInstanceKey());
+  }
+
+  public WorkflowInstanceRecordStream limitToWorkflowInstanceTerminated() {
+    return limit(
+        r ->
+            r.getIntent() == WorkflowInstanceIntent.ELEMENT_TERMINATED
+                && r.getKey() == r.getValue().getWorkflowInstanceKey());
+  }
+
+  public WorkflowInstanceRecordStream withElementType(BpmnElementType elementType) {
+    return valueFilter(v -> v.getBpmnElementType() == elementType);
   }
 
   /**

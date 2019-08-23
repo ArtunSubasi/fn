@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.servicecontainer.impl;
 
@@ -108,15 +100,11 @@ public class ServiceDependencyResolver {
 
     final List<ServiceController> dependents = this.dependentServices.get(controller);
     for (ServiceController dependentService : dependents) {
-      dependentService
-          .getChannel()
-          .add(new ServiceEvent(ServiceEventType.DEPENDENCIES_UNAVAILABLE, dependentService));
+      dependentService.fireEvent(ServiceEventType.DEPENDENCIES_UNAVAILABLE);
     }
 
     if (dependents.isEmpty()) {
-      controller
-          .getChannel()
-          .add(new ServiceEvent(ServiceEventType.DEPENDENTS_STOPPED, controller));
+      controller.fireEvent(ServiceEventType.DEPENDENTS_STOPPED);
     }
   }
 
@@ -132,28 +120,27 @@ public class ServiceDependencyResolver {
 
     final List<ServiceController> dependencies = resolvedDependencies.remove(controller);
     for (ServiceController dependency : dependencies) {
-      final List<ServiceController> deps = dependentServices.get(dependency);
+      final List<ServiceController> dependents = dependentServices.get(dependency);
 
-      if (deps != null) {
+      if (dependents != null) {
+        dependents.remove(controller);
         if (stoppingServices.contains(dependency)) {
-          boolean allStopped = true;
-          for (int i = 0; i < deps.size() && allStopped; i++) {
-            allStopped &= !startedServices.contains(deps.get(i));
-          }
-
+          final boolean allStopped = dependents.isEmpty();
           if (allStopped) {
-            dependency
-                .getChannel()
-                .add(new ServiceEvent(ServiceEventType.DEPENDENTS_STOPPED, dependency));
+            dependency.fireEvent(ServiceEventType.DEPENDENTS_STOPPED);
           }
         }
-
-        deps.remove(controller);
       }
     }
 
     installedServices.remove(controller.getServiceName());
-    dependentServices.remove(controller);
+
+    final List<ServiceController> dependents = dependentServices.remove(controller);
+    assert dependents == null || dependents.isEmpty()
+        : "Problem on dependency clean up, not closed dependents: "
+            + dependents
+            + " for controller "
+            + controller.getServiceName();
   }
 
   private void onServiceStarted(ServiceEvent event) {
@@ -220,6 +207,9 @@ public class ServiceDependencyResolver {
       }
     }
     this.resolvedDependencies.put(controller, resolvedDependencies);
+    if (dependencies.isEmpty()) {
+      rootServices.add(controller);
+    }
 
     /** resolve other services' dependencies which depend on this service */
     List<ServiceController> dependents = unresolvedDependencies.remove(controller.getServiceName());
@@ -233,6 +223,12 @@ public class ServiceDependencyResolver {
 
     this.dependentServices.put(controller, dependents);
     checkDependenciesAvailable(controller);
+  }
+
+  private final List<ServiceController> rootServices = new ArrayList<>();
+
+  public List<ServiceController> getRootServices() {
+    return rootServices;
   }
 
   private void checkDependenciesAvailable(ServiceController controller) {
@@ -251,13 +247,8 @@ public class ServiceDependencyResolver {
     }
 
     if (dependenciesAvailable) {
-      controller
-          .getChannel()
-          .add(
-              new ServiceEvent(
-                  ServiceEventType.DEPENDENCIES_AVAILABLE,
-                  controller,
-                  new ArrayList<>(resolvedDependencies)));
+      controller.fireEvent(
+          ServiceEventType.DEPENDENCIES_AVAILABLE, new ArrayList<>(resolvedDependencies));
     }
   }
 

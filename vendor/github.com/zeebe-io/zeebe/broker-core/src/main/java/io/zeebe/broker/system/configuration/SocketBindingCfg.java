@@ -1,28 +1,24 @@
 /*
- * Zeebe Broker Core
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.broker.system.configuration;
 
 import io.zeebe.transport.SocketAddress;
 
-public abstract class SocketBindingCfg {
+public class SocketBindingCfg {
+  public static final String DEFAULT_SEND_BUFFER_SIZE = "16M";
+
   protected String host;
   protected int port;
   protected String sendBufferSize;
+
+  private SocketBindingCfg(int defaultPort) {
+    this.port = defaultPort;
+  }
 
   public SocketAddress toSocketAddress() {
     return new SocketAddress(host, port);
@@ -34,7 +30,7 @@ public abstract class SocketBindingCfg {
     }
 
     if (sendBufferSize == null) {
-      sendBufferSize = networkCfg.getDefaultSendBufferSize();
+      sendBufferSize = DEFAULT_SEND_BUFFER_SIZE;
     }
 
     port += networkCfg.getPortOffset() * 10;
@@ -76,5 +72,23 @@ public abstract class SocketBindingCfg {
         + sendBufferSize
         + '\''
         + '}';
+  }
+
+  public static class CommandApiCfg extends SocketBindingCfg {
+    public CommandApiCfg() {
+      super(NetworkCfg.DEFAULT_COMMAND_API_PORT);
+    }
+  }
+
+  public static class InternalApiCfg extends SocketBindingCfg {
+    public InternalApiCfg() {
+      super(NetworkCfg.DEFAULT_INTERNAL_API_PORT);
+    }
+  }
+
+  public static class MonitoringApiCfg extends SocketBindingCfg {
+    public MonitoringApiCfg() {
+      super(NetworkCfg.DEFAULT_MONITORING_API_PORT);
+    }
   }
 }

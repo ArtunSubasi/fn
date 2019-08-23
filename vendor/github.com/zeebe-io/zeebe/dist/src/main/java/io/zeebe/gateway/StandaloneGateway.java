@@ -1,58 +1,86 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.gateway;
 
+import io.atomix.cluster.AtomixCluster;
+import io.atomix.cluster.discovery.BootstrapDiscoveryProvider;
+import io.atomix.utils.net.Address;
+import io.prometheus.client.exporter.HTTPServer;
+import io.zeebe.gateway.impl.configuration.ClusterCfg;
 import io.zeebe.gateway.impl.configuration.GatewayCfg;
 import io.zeebe.util.TomlConfigurationReader;
+import java.io.IOException;
 import java.nio.file.Paths;
 
 public class StandaloneGateway {
 
-  public static void main(String args[]) throws Exception {
-    final Gateway gateway;
-    if (args.length >= 1) {
-      gateway = createGatewayFromConfiguration(args);
-    } else {
-      gateway = createDefaultGateway();
+  private final AtomixCluster atomixCluster;
+  private final Gateway gateway;
+  private final GatewayCfg gatewayCfg;
+
+  public StandaloneGateway(GatewayCfg gatewayCfg) {
+    atomixCluster = createAtomixCluster(gatewayCfg.getCluster());
+    gateway = new Gateway(gatewayCfg, atomixCluster);
+    this.gatewayCfg = gatewayCfg;
+  }
+
+  private AtomixCluster createAtomixCluster(ClusterCfg clusterCfg) {
+    final AtomixCluster atomixCluster =
+        AtomixCluster.builder()
+            .withMemberId(clusterCfg.getMemberId())
+            .withAddress(Address.from(clusterCfg.getHost(), clusterCfg.getPort()))
+            .withClusterId(clusterCfg.getClusterName())
+            .withMembershipProvider(
+                BootstrapDiscoveryProvider.builder()
+                    .withNodes(Address.from(clusterCfg.getContactPoint()))
+                    .build())
+            .build();
+
+    atomixCluster.start();
+
+    return atomixCluster;
+  }
+
+  public void run() throws IOException, InterruptedException {
+    HTTPServer monitoringServer = null;
+    if (gatewayCfg.getMonitoring().isEnabled()) {
+      monitoringServer =
+          new HTTPServer(
+              gatewayCfg.getMonitoring().getHost(), gatewayCfg.getMonitoring().getPort());
     }
 
     gateway.listenAndServe();
-  }
+    atomixCluster.stop();
 
-  private static Gateway createGatewayFromConfiguration(String[] args) {
-    String configFileLocation = args[0];
-
-    if (!Paths.get(configFileLocation).isAbsolute()) {
-      configFileLocation =
-          Paths.get(getBasePath(), configFileLocation).toAbsolutePath().normalize().toString();
+    if (monitoringServer != null) {
+      monitoringServer.stop();
     }
-
-    final GatewayCfg gatewayCfg =
-        TomlConfigurationReader.read(configFileLocation, GatewayCfg.class);
-
-    return createGateway(gatewayCfg);
   }
 
-  private static Gateway createDefaultGateway() {
-    return createGateway(new GatewayCfg());
-  }
-
-  private static Gateway createGateway(GatewayCfg gatewayCfg) {
+  public static void main(String args[]) throws Exception {
+    final GatewayCfg gatewayCfg = initConfiguration(args);
     gatewayCfg.init();
-    return new Gateway(gatewayCfg);
+    new StandaloneGateway(gatewayCfg).run();
+  }
+
+  private static GatewayCfg initConfiguration(String[] args) {
+    if (args.length >= 1) {
+      String configFileLocation = args[0];
+
+      if (!Paths.get(configFileLocation).isAbsolute()) {
+        configFileLocation =
+            Paths.get(getBasePath(), configFileLocation).toAbsolutePath().normalize().toString();
+      }
+
+      return TomlConfigurationReader.read(configFileLocation, GatewayCfg.class);
+    } else {
+      return new GatewayCfg();
+    }
   }
 
   private static String getBasePath() {

@@ -1,129 +1,324 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.logstreams.state;
 
-import static java.nio.file.FileVisitResult.CONTINUE;
-import static java.nio.file.FileVisitResult.SKIP_SUBTREE;
-
 import io.zeebe.db.ZeebeDb;
 import io.zeebe.db.ZeebeDbFactory;
+import io.zeebe.distributedlog.restore.snapshot.SnapshotRestoreInfo;
+import io.zeebe.distributedlog.restore.snapshot.impl.DefaultSnapshotRestoreInfo;
+import io.zeebe.distributedlog.restore.snapshot.impl.NullSnapshotRestoreInfo;
 import io.zeebe.logstreams.impl.Loggers;
+import io.zeebe.logstreams.impl.delete.DeletionService;
+import io.zeebe.logstreams.impl.delete.NoopDeletionService;
 import io.zeebe.logstreams.spi.SnapshotController;
+import io.zeebe.logstreams.spi.ValidSnapshotListener;
 import io.zeebe.util.FileUtil;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
-import java.util.function.Predicate;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 
 /** Controls how snapshot/recovery operations are performed */
-public class StateSnapshotController implements SnapshotController {
-  private static final Logger LOG = Loggers.ROCKSDB_LOGGER;
+public class StateSnapshotController implements SnapshotController, ValidSnapshotListener {
+  private static final Logger LOG = Loggers.SNAPSHOT_LOGGER;
+
+  private static final String ERROR_MSG_ENSURING_MAX_SNAPSHOT_COUNT =
+      "Unexpected exception occurred on ensuring maximum snapshot count.";
 
   private final StateStorage storage;
   private final ZeebeDbFactory zeebeDbFactory;
   private ZeebeDb db;
+  private final ReplicationController replicationController;
+  private DeletionService deletionService = new NoopDeletionService();
+  private final int maxSnapshotCount;
+  private volatile SnapshotRestoreInfo snapshotRestoreInfo = new NullSnapshotRestoreInfo();
 
   public StateSnapshotController(final ZeebeDbFactory rocksDbFactory, final StateStorage storage) {
-    zeebeDbFactory = rocksDbFactory;
+    this(rocksDbFactory, storage, new NoneSnapshotReplication(), 1);
+  }
+
+  public StateSnapshotController(
+      final ZeebeDbFactory rocksDbFactory, final StateStorage storage, int maxSnapshotCount) {
+    this(rocksDbFactory, storage, new NoneSnapshotReplication(), maxSnapshotCount);
+  }
+
+  public StateSnapshotController(
+      ZeebeDbFactory zeebeDbFactory,
+      StateStorage storage,
+      SnapshotReplication replication,
+      int maxSnapshotCount) {
     this.storage = storage;
+    this.zeebeDbFactory = zeebeDbFactory;
+    this.maxSnapshotCount = maxSnapshotCount;
+    this.replicationController = new ReplicationController(replication, storage, this);
+
+    initializeRestoreInfo();
   }
 
   @Override
-  public void takeSnapshot(final StateSnapshotMetadata metadata) {
+  public void takeSnapshot(long lowerBoundSnapshotPosition) {
     if (db == null) {
       throw new IllegalStateException("Cannot create snapshot of not open database.");
     }
 
-    if (exists(metadata)) {
-      return;
+    final File snapshotDir = storage.getSnapshotDirectoryFor(lowerBoundSnapshotPosition);
+    db.createSnapshot(snapshotDir);
+    snapshotRestoreInfo =
+        new DefaultSnapshotRestoreInfo(lowerBoundSnapshotPosition, snapshotDir.listFiles().length);
+  }
+
+  @Override
+  public void takeTempSnapshot() {
+    if (db == null) {
+      throw new IllegalStateException("Cannot create snapshot of not open database.");
     }
 
-    final File snapshotDir = storage.getSnapshotDirectoryFor(metadata);
+    final File snapshotDir = storage.getTempSnapshotDirectory();
+    LOG.debug("Take temporary snapshot and write into {}.", snapshotDir.getAbsolutePath());
     db.createSnapshot(snapshotDir);
   }
 
   @Override
-  public StateSnapshotMetadata recover(
-      long commitPosition, int term, Predicate<StateSnapshotMetadata> filter) throws Exception {
-    final File runtimeDirectory = storage.getRuntimeDirectory();
-    final List<StateSnapshotMetadata> snapshots = storage.listRecoverable(commitPosition);
-    StateSnapshotMetadata recoveredMetadata = null;
-
-    if (!snapshots.isEmpty()) {
-      recoveredMetadata =
-          snapshots
-              .stream()
-              .sorted(Comparator.reverseOrder())
-              .filter(filter)
-              .findFirst()
-              .orElse(null);
+  public void moveValidSnapshot(long lowerBoundSnapshotPosition) throws IOException {
+    if (db == null) {
+      throw new IllegalStateException("Cannot create snapshot of not open database.");
     }
+
+    final File previousLocation = storage.getTempSnapshotDirectory();
+    if (!previousLocation.exists()) {
+      throw new IllegalStateException(
+          String.format(
+              "Temporary snapshot directory %s does not exist.",
+              previousLocation.getAbsolutePath()));
+    }
+
+    final File snapshotDir = storage.getSnapshotDirectoryFor(lowerBoundSnapshotPosition);
+    if (snapshotDir.exists()) {
+      return;
+    }
+
+    LOG.debug(
+        "Snapshot is valid. Move snapshot from {} to {}.",
+        previousLocation.getAbsolutePath(),
+        snapshotDir.getAbsolutePath());
+
+    Files.move(previousLocation.toPath(), snapshotDir.toPath());
+    onNewValidSnapshot();
+  }
+
+  public void replicateLatestSnapshot(Consumer<Runnable> executor) {
+    final List<File> snapshots = storage.listByPositionDesc();
+
+    if (snapshots != null && !snapshots.isEmpty()) {
+      final File latestSnapshotDirectory = snapshots.get(0);
+      LOG.debug("Start replicating latest snapshot {}", latestSnapshotDirectory.toPath());
+      final long snapshotPosition = Long.parseLong(latestSnapshotDirectory.getName());
+
+      final File[] files = latestSnapshotDirectory.listFiles();
+      for (File snapshotChunkFile : files) {
+        executor.accept(
+            () -> {
+              LOG.debug("Replicate snapshot chunk {}", snapshotChunkFile.toPath());
+              replicationController.replicate(snapshotPosition, files.length, snapshotChunkFile);
+            });
+      }
+    }
+  }
+
+  public void consumeReplicatedSnapshots() {
+    replicationController.consumeReplicatedSnapshots();
+  }
+
+  public void setDeletionService(DeletionService deletionService) {
+    this.deletionService = deletionService;
+  }
+
+  @Override
+  public SnapshotRestoreInfo getLatestSnapshotRestoreInfo() {
+    return snapshotRestoreInfo;
+  }
+
+  @Override
+  public long recover() throws Exception {
+    final File runtimeDirectory = storage.getRuntimeDirectory();
 
     if (runtimeDirectory.exists()) {
       FileUtil.deleteFolder(runtimeDirectory.getAbsolutePath());
     }
 
-    if (recoveredMetadata != null) {
-      final File snapshotPath = storage.getSnapshotDirectoryFor(recoveredMetadata);
-      copySnapshot(runtimeDirectory, snapshotPath);
-    } else {
-      recoveredMetadata = StateSnapshotMetadata.createInitial(term);
+    final List<File> snapshots = storage.listByPositionDesc();
+    LOG.debug("Available snapshots: {}", snapshots);
+
+    long lowerBoundSnapshotPosition = -1;
+
+    final Iterator<File> snapshotIterator = snapshots.iterator();
+    while (snapshotIterator.hasNext() && lowerBoundSnapshotPosition < 0) {
+      final File snapshotDirectory = snapshotIterator.next();
+
+      FileUtil.copySnapshot(runtimeDirectory, snapshotDirectory);
+
+      try {
+        // open database to verify that the snapshot is recoverable
+        openDb();
+
+        LOG.debug("Recovered state from snapshot '{}'", snapshotDirectory);
+
+        lowerBoundSnapshotPosition = Long.parseLong(snapshotDirectory.getName());
+
+        snapshotRestoreInfo =
+            new DefaultSnapshotRestoreInfo(
+                lowerBoundSnapshotPosition, snapshotDirectory.listFiles().length);
+      } catch (Exception e) {
+        FileUtil.deleteFolder(runtimeDirectory.getAbsolutePath());
+
+        if (snapshotIterator.hasNext()) {
+          LOG.warn(
+              "Failed to open snapshot '{}'. Delete this snapshot and try the previous one.",
+              snapshotDirectory,
+              e);
+          FileUtil.deleteFolder(snapshotDirectory.getAbsolutePath());
+
+        } else {
+          LOG.error(
+              "Failed to open snapshot '{}'. No snapshots available to recover from. Manual action is required.",
+              snapshotDirectory,
+              e);
+          throw new RuntimeException("Failed to recover from snapshots", e);
+        }
+      }
     }
 
-    return recoveredMetadata;
+    return lowerBoundSnapshotPosition;
   }
 
   @Override
   public ZeebeDb openDb() {
-    db = zeebeDbFactory.createDb(storage.getRuntimeDirectory());
+    if (db == null) {
+      final File runtimeDirectory = storage.getRuntimeDirectory();
+      db = zeebeDbFactory.createDb(runtimeDirectory);
+      LOG.debug("Opened database from '{}'.", runtimeDirectory.toPath());
+    }
+
     return db;
   }
 
   @Override
-  public void purgeAll(Predicate<StateSnapshotMetadata> matcher) throws Exception {
-    final List<StateSnapshotMetadata> others = storage.list(matcher);
+  public void onNewValidSnapshot() {
+    try {
+      final File latestSnapshot = getLastValidSnapshotDirectory();
+      snapshotRestoreInfo =
+          new DefaultSnapshotRestoreInfo(
+              Long.parseLong(latestSnapshot.getName()), latestSnapshot.listFiles().length);
 
-    for (final StateSnapshotMetadata other : others) {
-      FileUtil.deleteFolder(storage.getSnapshotDirectoryFor(other).getAbsolutePath());
-      LOG.trace("Purged snapshot {}", other);
+      ensureMaxSnapshotCount();
+    } catch (IOException e) {
+      LOG.error(ERROR_MSG_ENSURING_MAX_SNAPSHOT_COUNT, e);
+    }
+
+    if (getValidSnapshotsCount() >= maxSnapshotCount) {
+      deletionService.delete(getPositionToDelete(maxSnapshotCount));
     }
   }
 
-  private boolean exists(final StateSnapshotMetadata metadata) {
-    return storage.getSnapshotDirectoryFor(metadata).exists();
+  public void ensureMaxSnapshotCount() throws IOException {
+    final List<File> snapshots = storage.listByPositionAsc();
+    if (snapshots.size() > maxSnapshotCount) {
+      final int oldestValidSnapshotIndex = snapshots.size() - maxSnapshotCount;
+      LOG.debug(
+          "Ensure max snapshot count {}, will delete {} snapshot(s).",
+          maxSnapshotCount,
+          oldestValidSnapshotIndex);
+
+      final List<File> snapshotsToRemove = snapshots.subList(0, oldestValidSnapshotIndex);
+
+      for (final File snapshot : snapshotsToRemove) {
+        FileUtil.deleteFolder(snapshot.toPath());
+        LOG.debug("Purged snapshot {}", snapshot);
+      }
+
+      cleanUpTemporarySnapshots(snapshots, oldestValidSnapshotIndex);
+    } else {
+      LOG.debug(
+          "Tried to ensure max snapshot count {}, nothing to do snapshot count is {}.",
+          maxSnapshotCount,
+          snapshots.size());
+    }
   }
 
-  private void copySnapshot(File runtimeDirectory, File snapshotPath) throws Exception {
-    final Path targetPath = runtimeDirectory.toPath();
-    final Path sourcePath = snapshotPath.toPath();
-    Files.walkFileTree(sourcePath, new SnapshotCopier(sourcePath, targetPath));
+  /**
+   * Removes orphaned snapshots, where the replication was not completed successfully. Uses the
+   * oldest valid snapshot position to decide which snapshot can be removed.
+   *
+   * @param snapshots the list of valid snapshot directories
+   * @param oldestValidSnapshotIndex the index of the oldest valid snapshot
+   * @throws IOException can be thrown on deletion
+   */
+  private void cleanUpTemporarySnapshots(List<File> snapshots, int oldestValidSnapshotIndex)
+      throws IOException {
+    final File oldestValidSnapshot = snapshots.get(oldestValidSnapshotIndex);
+    final long oldestValidSnapshotPosition = Long.parseLong(oldestValidSnapshot.getName());
+    LOG.debug(
+        "Search for orphaned snapshots below oldest valid snapshot position {}",
+        oldestValidSnapshotPosition);
+
+    final List<File> tmpDirectoriesBelowPosition =
+        storage.findTmpDirectoriesBelowPosition(oldestValidSnapshotPosition);
+    for (final File notCompletedSnapshot : tmpDirectoriesBelowPosition) {
+      FileUtil.deleteFolder(notCompletedSnapshot.toPath());
+      LOG.debug("Delete not completed (orphaned) snapshot {}", notCompletedSnapshot);
+    }
+  }
+
+  public long getPositionToDelete(int maxSnapshotCount) {
+    return storage.listByPositionDesc().stream()
+        .skip(maxSnapshotCount - 1)
+        .findFirst()
+        .map(f -> Long.parseLong(f.getName()))
+        .orElse(-1L);
+  }
+
+  @Override
+  public int getValidSnapshotsCount() {
+    return storage.list().size();
+  }
+
+  @Override
+  public long getLastValidSnapshotPosition() {
+    return storage.listByPositionDesc().stream()
+        .map(File::getName)
+        .mapToLong(Long::parseLong)
+        .findFirst()
+        .orElse(-1L);
+  }
+
+  @Override
+  public File getLastValidSnapshotDirectory() {
+    final List<File> snapshots = storage.listByPositionDesc();
+    if (snapshots != null && !snapshots.isEmpty()) {
+      return snapshots.get(0);
+    }
+    return null;
+  }
+
+  @Override
+  public File getSnapshotDirectoryFor(long snapshotId) {
+    return storage.getSnapshotDirectoryFor(snapshotId);
   }
 
   @Override
   public void close() throws Exception {
     if (db != null) {
       db.close();
+      final File runtimeDirectory = storage.getRuntimeDirectory();
+      LOG.debug("Closed database from '{}'.", runtimeDirectory.toPath());
       db = null;
     }
   }
@@ -132,52 +327,15 @@ public class StateSnapshotController implements SnapshotController {
     return db != null;
   }
 
-  private static final class SnapshotCopier extends SimpleFileVisitor<Path> {
+  private void initializeRestoreInfo() {
+    final File lastSnapshot = getLastValidSnapshotDirectory();
+    if (lastSnapshot != null) {
+      final int numFiles = lastSnapshot.listFiles().length;
+      final long lastSnapshotPosition = Long.parseLong(lastSnapshot.getName());
 
-    private final Path targetPath;
-    private final Path sourcePath;
-
-    SnapshotCopier(Path sourcePath, Path targetPath) {
-      this.sourcePath = sourcePath;
-      this.targetPath = targetPath;
-    }
-
-    @Override
-    public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
-        throws IOException {
-      final Path newDirectory = targetPath.resolve(sourcePath.relativize(dir));
-      try {
-        Files.copy(dir, newDirectory);
-      } catch (FileAlreadyExistsException ioException) {
-        LOG.error("Problem on copying snapshot to runtime.", ioException);
-        return SKIP_SUBTREE; // skip processing
+      if (lastSnapshotPosition > -1L && numFiles > 0) {
+        snapshotRestoreInfo = new DefaultSnapshotRestoreInfo(lastSnapshotPosition, numFiles);
       }
-
-      return CONTINUE;
-    }
-
-    @Override
-    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-      final Path newFile = targetPath.resolve(sourcePath.relativize(file));
-
-      try {
-        Files.copy(file, newFile);
-      } catch (IOException ioException) {
-        LOG.error("Problem on copying snapshot to runtime.", ioException);
-      }
-
-      return CONTINUE;
-    }
-
-    @Override
-    public FileVisitResult postVisitDirectory(Path dir, IOException exc) {
-      return CONTINUE;
-    }
-
-    @Override
-    public FileVisitResult visitFileFailed(Path file, IOException exc) {
-      LOG.error("Problem on copying snapshot to runtime.", exc);
-      return CONTINUE;
     }
   }
 }

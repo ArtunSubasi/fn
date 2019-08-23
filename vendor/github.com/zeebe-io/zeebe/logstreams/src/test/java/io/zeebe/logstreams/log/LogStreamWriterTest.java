@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.logstreams.log;
 
@@ -63,8 +55,6 @@ public class LogStreamWriterTest {
   @Before
   public void setUp() {
     writer = new LogStreamWriterImpl(logStreamRule.getLogStream());
-
-    logStreamRule.setCommitPosition(Long.MAX_VALUE);
   }
 
   private LoggedEvent getWrittenEvent(final long position) {
@@ -218,15 +208,6 @@ public class LogStreamWriterTest {
   }
 
   @Test
-  public void shouldWriteEventWithPositionAsKey() {
-    // when
-    final long position = writer.positionAsKey().value(EVENT_VALUE).tryWrite();
-
-    // then
-    assertThat(getWrittenEvent(position).getKey()).isEqualTo(position);
-  }
-
-  @Test
   public void shouldWriteEventWithSourceEvent() {
     // when
     final long position = writer.value(EVENT_VALUE).sourceRecordPosition(123L).tryWrite();
@@ -244,36 +225,6 @@ public class LogStreamWriterTest {
     // then
     final LoggedEvent event = getWrittenEvent(position);
     assertThat(event.getSourceEventPosition()).isEqualTo(-1L);
-  }
-
-  @Test
-  public void shouldWriteEventWithProducerId() {
-    // when
-    final long position = writer.value(EVENT_VALUE).producerId(123).tryWrite();
-
-    // then
-    assertThat(getWrittenEvent(position).getProducerId()).isEqualTo(123);
-  }
-
-  @Test
-  public void shouldWriteEventWithoutProducerId() {
-    // when
-    final long position = writer.value(EVENT_VALUE).tryWrite();
-
-    // then
-    assertThat(getWrittenEvent(position).getProducerId()).isEqualTo(-1);
-  }
-
-  @Test
-  public void shouldWriteEventWithRaftTerm() {
-    // given
-    logStreamRule.getLogStream().setTerm(123);
-
-    // when
-    final long position = writer.value(EVENT_VALUE).tryWrite();
-
-    // then
-    assertThat(getWrittenEvent(position).getRaftTerm()).isEqualTo(123);
   }
 
   @Test

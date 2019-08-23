@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.msgpack.spec;
 
@@ -42,7 +34,6 @@ import static io.zeebe.msgpack.spec.MsgPackCodes.isFixInt;
 import static io.zeebe.msgpack.spec.MsgPackCodes.isFixStr;
 import static io.zeebe.msgpack.spec.MsgPackCodes.isFixedArray;
 import static io.zeebe.msgpack.spec.MsgPackCodes.isFixedMap;
-import static io.zeebe.msgpack.spec.MsgPackHelper.ensurePositive;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 import static org.agrona.BitUtil.SIZE_OF_SHORT;
 
@@ -337,7 +328,8 @@ public class MsgPackReader {
         break;
       case EXTENSION:
       case NEVER_USED:
-        throw new RuntimeException("Unsupported token format");
+        throw new MsgpackReaderException(
+            String.format("Unknown token format '%s'", format.getType().name()));
     }
 
     token.setTotalLength(offset - currentOffset);
@@ -357,7 +349,7 @@ public class MsgPackReader {
     skipValues(1);
   }
 
-  public void skipValues(int count) {
+  public void skipValues(long count) {
     while (count > 0) {
       final byte b = buffer.getByte(offset);
       ++offset;
@@ -373,7 +365,7 @@ public class MsgPackReader {
         case FIXMAP:
           {
             final int mapLen = b & 0x0f;
-            count += mapLen * 2;
+            count += mapLen * 2L;
             break;
           }
         case FIXARRAY:
@@ -416,8 +408,7 @@ public class MsgPackReader {
           break;
         case BIN32:
         case STR32:
-          final int length = (int) ensurePositive(buffer.getInt(offset, BYTE_ORDER));
-          offset += 4 + length;
+          offset += 4 + (int) ensurePositive(buffer.getInt(offset, BYTE_ORDER));
           break;
         case FIXEXT1:
           offset += 2;
@@ -435,32 +426,32 @@ public class MsgPackReader {
           offset += 17;
           break;
         case EXT8:
-          offset += 1 + 1 + buffer.getByte(offset);
+          offset += 1 + 1 + Byte.toUnsignedInt(buffer.getByte(offset));
           break;
         case EXT16:
-          offset += 1 + 2 + buffer.getShort(offset, BYTE_ORDER);
+          offset += 1 + 2 + Short.toUnsignedInt(buffer.getShort(offset, BYTE_ORDER));
           break;
         case EXT32:
-          offset += 1 + 4 + buffer.getInt(offset, BYTE_ORDER);
+          offset += 1 + 4 + (int) ensurePositive(buffer.getInt(offset, BYTE_ORDER));
           break;
         case ARRAY16:
-          count += buffer.getShort(offset, BYTE_ORDER);
+          count += Short.toUnsignedInt(buffer.getShort(offset, BYTE_ORDER));
           offset += 2;
           break;
         case ARRAY32:
-          count += buffer.getInt(offset, BYTE_ORDER);
+          count += ensurePositive(buffer.getInt(offset, BYTE_ORDER));
           offset += 4;
           break;
         case MAP16:
-          count += buffer.getShort(offset, BYTE_ORDER) * 2;
+          count += Short.toUnsignedInt(buffer.getShort(offset, BYTE_ORDER)) * 2L;
           offset += 2;
           break;
         case MAP32:
-          count += buffer.getInt(offset, BYTE_ORDER) * 2;
+          count += ensurePositive(buffer.getInt(offset, BYTE_ORDER)) * 2L;
           offset += 4;
           break;
         case NEVER_USED:
-          throw new RuntimeException("Encountered 0xC1 \"NEVER_USED\" byte");
+          throw new MsgpackReaderException("Encountered 0xC1 \"NEVER_USED\" byte");
       }
 
       count--;
@@ -475,10 +466,19 @@ public class MsgPackReader {
     return offset < buffer.capacity();
   }
 
-  protected RuntimeException exceptionOnUnknownHeader(final String name, final byte headerByte) {
-    return new RuntimeException(
+  protected MsgpackReaderException exceptionOnUnknownHeader(
+      final String name, final byte headerByte) {
+    return new MsgpackReaderException(
         String.format(
             "Unable to determine %s type, found unknown header byte 0x%02x at reader offset %d",
             name, headerByte, offset - 1));
+  }
+
+  private long ensurePositive(long size) {
+    try {
+      return MsgPackHelper.ensurePositive(size);
+    } catch (MsgpackException e) {
+      throw new MsgpackReaderException(e);
+    }
   }
 }

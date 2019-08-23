@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.msgpack.jsonpath;
 
@@ -30,10 +22,11 @@ public class JsonPathQueryValidationTest {
   public static Iterable<Object[]> data() {
     return Arrays.asList(
         new Object[][] {
-          {"$..", 1, "Unexpected json-path token RECURSION_OPERATOR"}, // currently not supported
-          {"foo", 0, "Unexpected json-path token LITERAL"},
-          {"$.foo.$", 6, "Unexpected json-path token ROOT_OBJECT"},
-          {"$.[foo", 2, "Unexpected json-path token SUBSCRIPT_OPERATOR_BEGIN"}
+          {"$", 0, "Unexpected json-path token ROOT_OBJECT"},
+          {"$.foo", 0, "Unexpected json-path token ROOT_OBJECT"},
+          {"foo.$", 4, "Unexpected json-path token ROOT_OBJECT"},
+          {"foo.*", 4, "Unexpected json-path token WILDCARD"},
+          {"foo[0]", 3, "Unexpected json-path token SUBSCRIPT_OPERATOR_BEGIN"}
         });
   }
 

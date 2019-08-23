@@ -1,17 +1,9 @@
 /*
- * Copyright © 2017 camunda services GmbH (info@camunda.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
  */
 package io.zeebe.logstreams.impl.log.fs;
 
@@ -44,21 +36,25 @@ public class FsLogSegment {
 
   public static final short INSUFFICIENT_CAPACITY = -4;
 
-  public static final short STATE_ACTIVE = 1;
+  private static final short STATE_ACTIVE = 1;
 
-  public static final short STATE_FILLED = 2;
+  private static final short STATE_FILLED = 2;
+  private static final String ERROR_MSG_OUT_OF_SPACE =
+      "Expected to allocate new segment of size %d, but not enough space available (%d)";
+  private static final String ERROR_MSG_INSUFFICIENT_CAPACITY =
+      "Expected to append block with size %d, but actual capacity is insufficient %d.";
 
   protected volatile short state;
 
-  protected final String fileName;
+  private final String fileName;
 
-  protected FileChannel fileChannel;
+  private FileChannel fileChannel;
 
-  protected UnsafeBuffer metadataSection;
+  private UnsafeBuffer metadataSection;
 
-  protected MappedByteBuffer mappedBuffer;
+  private MappedByteBuffer mappedBuffer;
 
-  protected final Rater rater =
+  private final Rater rater =
       new Rater(
           1024 * 1024 * 4,
           () -> {
@@ -115,7 +111,7 @@ public class FsLogSegment {
     return metadataSection.getInt(SEGMENT_ID_OFFSET);
   }
 
-  protected void setSegmentId(int segmentId) {
+  private void setSegmentId(int segmentId) {
     metadataSection.putInt(SEGMENT_ID_OFFSET, segmentId);
   }
 
@@ -123,15 +119,15 @@ public class FsLogSegment {
     return metadataSection.getInt(SEGMENT_SIZE_OFFSET);
   }
 
-  public int getSizeVolatile() {
+  int getSizeVolatile() {
     return metadataSection.getIntVolatile(SEGMENT_SIZE_OFFSET);
   }
 
-  protected void setSizeOrdered(int tail) {
+  private void setSizeOrdered(int tail) {
     metadataSection.putIntOrdered(SEGMENT_SIZE_OFFSET, tail);
   }
 
-  protected void setSizeVolatile(int tail) {
+  private void setSizeVolatile(int tail) {
     metadataSection.putIntVolatile(SEGMENT_SIZE_OFFSET, tail);
   }
 
@@ -151,52 +147,40 @@ public class FsLogSegment {
     return state == STATE_ACTIVE;
   }
 
-  public boolean allocate(int segmentId, int segmentSize) {
-    boolean allocated = false;
+  public void allocate(int segmentId, int segmentSize) throws IOException {
+    final File file = new File(fileName);
+    final long availableSpace = FileUtil.getAvailableSpace(file.getParentFile());
 
-    try {
-      final File file = new File(fileName);
-      final long availableSpace = FileUtil.getAvailableSpace(file.getParentFile());
-
-      if (availableSpace > segmentSize) {
-        openSegment(true);
-
-        setSegmentId(segmentId);
-        setCapacity(segmentSize);
-        setSizeVolatile(METADATA_LENGTH);
-
-        allocated = true;
-      }
-    } catch (Exception e) {
-      LOG.error("Failed to allocate", e);
+    if (availableSpace <= segmentSize) {
+      throw new IOException(String.format(ERROR_MSG_OUT_OF_SPACE, segmentSize, availableSpace));
     }
 
-    return allocated;
+    openSegment(true);
+
+    setSegmentId(segmentId);
+    setCapacity(segmentSize);
+    setSizeVolatile(METADATA_LENGTH);
   }
 
   /**
    * @param block
    * @return the offset at which the block was appended
    */
-  public int append(final ByteBuffer block) {
+  public int append(final ByteBuffer block) throws IOException {
     final int blockLength = block.remaining();
     final int currentSize = getSize();
     final int remainingCapacity = getCapacity() - currentSize;
 
     if (remainingCapacity < blockLength) {
-      return INSUFFICIENT_CAPACITY;
+      throw new IllegalArgumentException(
+          String.format(ERROR_MSG_INSUFFICIENT_CAPACITY, blockLength, remainingCapacity));
     }
 
     int newSize = currentSize;
 
     while (newSize - currentSize < blockLength) {
-      try {
-        final int writtenBytes = fileChannel.write(block, newSize);
-        newSize += writtenBytes;
-      } catch (Exception e) {
-        LOG.error("Failed to write", e);
-        return -1;
-      }
+      final int writtenBytes = fileChannel.write(block, newSize);
+      newSize += writtenBytes;
     }
 
     setSizeOrdered(newSize);
