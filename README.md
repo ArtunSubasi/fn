@@ -12,9 +12,9 @@ Features of the Zeebe extension:
 * Provides a minimal REST endpoint to show the overview of registered Zeebe job workers
 
 # Requirements
-* [Zeebe](https://zeebe.io/) (tested using version 0.14.0)
-* [Fn CLI](https://github.com/fnproject/cli) (testet using version 0.5.40)
-* [Docker](https://www.docker.com/) (tested using Engine version 18.09.1)
+* [Zeebe](https://zeebe.io/) (tested using version 0.20.0)
+* [Fn CLI](https://github.com/fnproject/cli) (testet using version 0.5.65)
+* [Docker](https://www.docker.com/) (tested using Engine version 18.09 and 19.03)
 
 # How to install the extension?
 The Zeebe extension is built in to this fork of the Fn Repository. Build a new custom docker image of the Fn Server including the Zeebe extension:
