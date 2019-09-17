@@ -62,11 +62,17 @@ entrypoint: ./func
 format: http-stream
 config:
   zeebe_job_type: payment-service
+triggers:
+- name: payment-service-trigger
+  type: http
+  source: /payment-service
 ```
 In the above example, the function `collectmoney` is configured to handle Zeebe jobs with the type `payment-service`. As soon as the function is deployed to the Fn, the extension launches Zeebe job workers and starts listening for available Zeebe jobs of the `payment-service`.
 
 # Restrictions
 Fn functions which are configured to handle Zeebe jobs must return a Json object as a response. The POC does not provide an automatic output mapping. Therefore, other return types, including Json arrays as a root, lead to an incident in the corresponding Zeebe workflow instance.
+
+`fn-zeebe` depends on the HTTP trigger of the Fn functions. Therefore, a worker is started only if a HTTP trigger is configured for the function. 
 
 # Fn Server modes
 Fn server can be built in different modes: all-in-one, load balancer, API server and Fn runner. The following documentation describes the usage for the all-in-one mode.
