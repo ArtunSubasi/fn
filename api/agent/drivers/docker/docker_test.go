@@ -8,9 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fnproject/fn/api/agent/drivers"
+	"github.com/fnproject/fn/api/models"
 
-	"github.com/fsouza/go-dockerclient"
+	"github.com/fnproject/fn/api/agent/drivers"
+	"github.com/fnproject/fn/api/agent/drivers/stats"
+	docker "github.com/fsouza/go-dockerclient"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -24,22 +27,31 @@ type taskDockerTest struct {
 	logURL     string
 }
 
-func (f *taskDockerTest) Command() string                         { return f.cmd }
-func (f *taskDockerTest) EnvVars() map[string]string              { return map[string]string{} }
-func (f *taskDockerTest) Id() string                              { return f.id }
-func (f *taskDockerTest) Group() string                           { return "" }
-func (f *taskDockerTest) Image() string                           { return "busybox" }
-func (f *taskDockerTest) Logger() (stdout, stderr io.Writer)      { return f.output, f.errors }
-func (f *taskDockerTest) WriteStat(context.Context, drivers.Stat) { /* TODO */ }
-func (f *taskDockerTest) Volumes() [][2]string                    { return [][2]string{} }
-func (f *taskDockerTest) Memory() uint64                          { return 256 * 1024 * 1024 }
-func (f *taskDockerTest) CPUs() uint64                            { return 0 }
-func (f *taskDockerTest) FsSize() uint64                          { return 0 }
-func (f *taskDockerTest) TmpFsSize() uint64                       { return 0 }
-func (f *taskDockerTest) WorkDir() string                         { return "" }
-func (f *taskDockerTest) Close()                                  {}
-func (f *taskDockerTest) Input() io.Reader                        { return f.input }
-func (f *taskDockerTest) Extensions() map[string]string           { return nil }
+func (f *taskDockerTest) Command() string                                            { return f.cmd }
+func (f *taskDockerTest) EnvVars() map[string]string                                 { return map[string]string{} }
+func (f *taskDockerTest) Id() string                                                 { return f.id }
+func (f *taskDockerTest) Group() string                                              { return "" }
+func (f *taskDockerTest) Image() string                                              { return "busybox" }
+func (f *taskDockerTest) Logger() (stdout, stderr io.Writer)                         { return f.output, f.errors }
+func (f *taskDockerTest) WriteStat(context.Context, stats.Stat)                      { /* TODO */ }
+func (f *taskDockerTest) Volumes() [][2]string                                       { return [][2]string{} }
+func (f *taskDockerTest) Memory() uint64                                             { return 256 * 1024 * 1024 }
+func (f *taskDockerTest) CPUs() uint64                                               { return 0 }
+func (f *taskDockerTest) FsSize() uint64                                             { return 0 }
+func (f *taskDockerTest) PIDs() uint64                                               { return 0 }
+func (f *taskDockerTest) OpenFiles() *uint64                                         { return nil }
+func (f *taskDockerTest) LockedMemory() *uint64                                      { return nil }
+func (f *taskDockerTest) PendingSignals() *uint64                                    { return nil }
+func (f *taskDockerTest) MessageQueue() *uint64                                      { return nil }
+func (f *taskDockerTest) TmpFsSize() uint64                                          { return 0 }
+func (f *taskDockerTest) WorkDir() string                                            { return "" }
+func (f *taskDockerTest) Close()                                                     {}
+func (f *taskDockerTest) WrapClose(func(func()) func())                              {}
+func (f *taskDockerTest) WrapBeforeCall(func(drivers.BeforeCall) drivers.BeforeCall) {}
+func (f *taskDockerTest) WrapAfterCall(func(drivers.AfterCall) drivers.AfterCall)    {}
+func (f *taskDockerTest) Input() io.Reader                                           { return f.input }
+func (f *taskDockerTest) Extensions() map[string]string                              { return nil }
+
 func (f *taskDockerTest) LoggerConfig() drivers.LoggerConfig {
 	return drivers.LoggerConfig{URL: f.logURL}
 }
@@ -47,6 +59,13 @@ func (f *taskDockerTest) UDSAgentPath() string  { return "" }
 func (f *taskDockerTest) UDSDockerPath() string { return "" }
 func (f *taskDockerTest) UDSDockerDest() string { return "" }
 func (f *taskDockerTest) DisableNet() bool      { return f.disableNet }
+
+func (f *taskDockerTest) BeforeCall(context.Context, *models.Call, drivers.CallExtensions) error {
+	return nil
+}
+func (f *taskDockerTest) AfterCall(context.Context, *models.Call, drivers.CallExtensions) error {
+	return nil
+}
 
 func createTask(id string) *taskDockerTest {
 	return &taskDockerTest{
@@ -555,7 +574,7 @@ func TestRunnerDockerInvalidSyslog(t *testing.T) {
 	if err == nil {
 		t.Fatal("Error expected when running with invalid syslog configuration")
 	}
-	if err.Error() != "Syslog Unavailable" {
+	if err != models.ErrSyslogUnavailable {
 		t.Fatalf("Error message expected: `Syslog Unavailable`, got `%s`", err)
 	}
 

@@ -8,14 +8,16 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
-
-	"path/filepath"
 
 	"github.com/fnproject/fn/api/agent/drivers"
 	dockerdriver "github.com/fnproject/fn/api/agent/drivers/docker"
+	driver_stats "github.com/fnproject/fn/api/agent/drivers/stats"
 	"github.com/fnproject/fn/api/common"
 	"github.com/fnproject/fn/api/id"
 	"github.com/fnproject/fn/api/models"
@@ -23,33 +25,16 @@ import (
 	"github.com/fsnotify/fsnotify"
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/sirupsen/logrus"
+	"go.opencensus.io/plugin/ochttp"
 	"go.opencensus.io/stats"
+	"go.opencensus.io/tag"
 	"go.opencensus.io/trace"
-	"os"
+	"go.opencensus.io/trace/propagation"
 )
 
 const (
 	pauseTimeout = 5 * time.Second // docker pause/unpause
 )
-
-// TODO we should prob store async calls in db immediately since we're returning id (will 404 until post-execution)
-// TODO async calls need to add route.Headers as well
-// TODO handle timeouts / no response in sync & async (sync is json+503 atm, not 504, async is empty log+status)
-// see also: server/runner.go wrapping the response writer there, but need to handle async too (push down?)
-// TODO storing logs / call can push call over the timeout
-// TODO async is still broken, but way less so. we need to modify mq semantics
-// to be much more robust. now we're at least running it if we delete the msg,
-// but we may never store info about that execution so still broked (if fn
-// dies). need coordination w/ db.
-// TODO if async would store requests (or interchange format) it would be slick, but
-// if we're going to store full calls in db maybe we should only queue pointers to ids?
-// TODO examine cases where hot can't start a container and the user would never see an error
-// about why that may be so (say, whatever it is takes longer than the timeout, e.g.)
-// TODO if an image is not found or similar issues in getting a slot, then async should probably
-// mark the call as errored rather than forever trying & failing to run it
-// TODO it would be really nice if we made the ramToken wrap the driver cookie (less brittle,
-// if those leak the container leaks too...) -- not the allocation, but the token.Close and cookie.Close
-// TODO if machine is out of ram, just timeout immediately / wait for hot slot? (discuss policy)
 
 // Agent exposes an api to create calls from various parameters and then submit
 // those calls, it also exposes a 'safe' shutdown mechanism via its Close method.
@@ -58,7 +43,6 @@ const (
 //	* manage the container lifecycle for calls
 //	* execute calls against containers
 //	* invoke Start and End for each call appropriately
-//	* check the mq for any async calls, and submit them
 //
 // Overview:
 // Upon submission of a call, Agent will start the call's timeout timer
@@ -96,7 +80,6 @@ type Agent interface {
 
 type agent struct {
 	cfg           Config
-	da            CallHandler
 	callListeners []fnext.CallListener
 
 	driver drivers.Driver
@@ -128,7 +111,7 @@ type Option func(*agent) error
 const RegistryToken = "FN_REGISTRY_TOKEN"
 
 // New creates an Agent that executes functions locally as Docker containers.
-func New(da CallHandler, options ...Option) Agent {
+func New(options ...Option) Agent {
 
 	cfg, err := NewConfig()
 	if err != nil {
@@ -140,7 +123,6 @@ func New(da CallHandler, options ...Option) Agent {
 	}
 
 	a.shutWg = common.NewWaitGroup()
-	a.da = da
 	a.slotMgr = NewSlotQueueMgr()
 	a.evictor = NewEvictor()
 
@@ -173,19 +155,6 @@ func New(da CallHandler, options ...Option) Agent {
 func (a *agent) addStartup(sup func()) {
 	a.onStartup = append(a.onStartup, sup)
 
-}
-
-// WithAsync Enables Async  operations on the agent
-func WithAsync(dqda DequeueDataAccess) Option {
-	return func(a *agent) error {
-		a.addStartup(func() {
-			if !a.shutWg.AddSession(1) {
-				logrus.Fatal("cannot start agent, unable to add session")
-			}
-			go a.asyncDequeue(dqda) // safe shutdown can nanny this fine
-		})
-		return nil
-	}
 }
 
 // WithConfig sets the agent config to the provided config
@@ -231,20 +200,21 @@ func WithCallOptions(opts ...CallOpt) Option {
 // NewDockerDriver creates a default docker driver from agent config
 func NewDockerDriver(cfg *Config) (drivers.Driver, error) {
 	return drivers.New("docker", drivers.Config{
-		DockerNetworks:       cfg.DockerNetworks,
-		DockerLoadFile:       cfg.DockerLoadFile,
-		ServerVersion:        cfg.MinDockerVersion,
-		PreForkPoolSize:      cfg.PreForkPoolSize,
-		PreForkImage:         cfg.PreForkImage,
-		PreForkCmd:           cfg.PreForkCmd,
-		PreForkUseOnce:       cfg.PreForkUseOnce,
-		PreForkNetworks:      cfg.PreForkNetworks,
-		MaxTmpFsInodes:       cfg.MaxTmpFsInodes,
-		EnableReadOnlyRootFs: !cfg.DisableReadOnlyRootFs,
-		ContainerLabelTag:    cfg.ContainerLabelTag,
-		ImageCleanMaxSize:    cfg.ImageCleanMaxSize,
-		ImageCleanExemptTags: cfg.ImageCleanExemptTags,
-		ImageEnableVolume:    cfg.ImageEnableVolume,
+		DockerNetworks:                cfg.DockerNetworks,
+		DockerLoadFile:                cfg.DockerLoadFile,
+		ServerVersion:                 cfg.MinDockerVersion,
+		PreForkPoolSize:               cfg.PreForkPoolSize,
+		PreForkImage:                  cfg.PreForkImage,
+		PreForkCmd:                    cfg.PreForkCmd,
+		PreForkUseOnce:                cfg.PreForkUseOnce,
+		PreForkNetworks:               cfg.PreForkNetworks,
+		MaxTmpFsInodes:                cfg.MaxTmpFsInodes,
+		EnableReadOnlyRootFs:          !cfg.DisableReadOnlyRootFs,
+		ContainerLabelTag:             cfg.ContainerLabelTag,
+		ImageCleanMaxSize:             cfg.ImageCleanMaxSize,
+		ImageCleanExemptTags:          cfg.ImageCleanExemptTags,
+		ImageEnableVolume:             cfg.ImageEnableVolume,
+		DisableUnprivilegedContainers: cfg.DisableUnprivilegedContainers,
 	})
 }
 
@@ -266,19 +236,34 @@ func (a *agent) Close() error {
 
 func (a *agent) Submit(callI Call) error {
 	call := callI.(*call)
-	ctx, span := trace.StartSpan(call.req.Context(), "agent_submit")
+
+	ctx := call.req.Context()
+
+	callIDKey, err := tag.NewKey("agent.call_id")
+	if err != nil {
+		return err
+	}
+	ctx, err = tag.New(ctx, tag.Insert(callIDKey, call.ID))
+	if err != nil {
+		return err
+	}
+
+	ctx, span := trace.StartSpan(ctx, "agent_submit")
 	defer span.End()
 
-	statsCalls(ctx)
-
-	if !a.shutWg.AddSession(1) {
-		statsTooBusy(ctx)
-		return models.ErrCallTimeoutServerBusy
+	span.AddAttributes(
+		trace.StringAttribute("fn.call_id", call.ID),
+		trace.StringAttribute("fn.app_id", call.AppID),
+		trace.StringAttribute("fn.fn_id", call.FnID),
+	)
+	rid := common.RequestIDFromContext(ctx)
+	if rid != "" {
+		span.AddAttributes(
+			trace.StringAttribute("fn.rid", rid),
+		)
 	}
-	defer a.shutWg.DoneSession()
 
-	err := a.submit(ctx, call)
-	return err
+	return a.submit(ctx, call)
 }
 
 func (a *agent) startStateTrackers(ctx context.Context, call *call) {
@@ -290,6 +275,14 @@ func (a *agent) endStateTrackers(ctx context.Context, call *call) {
 }
 
 func (a *agent) submit(ctx context.Context, call *call) error {
+	statsCalls(ctx)
+
+	if !a.shutWg.AddSession(1) {
+		statsTooBusy(ctx)
+		return models.ErrCallTimeoutServerBusy
+	}
+	defer a.shutWg.DoneSession()
+
 	statsEnqueue(ctx)
 
 	a.startStateTrackers(ctx, call)
@@ -353,18 +346,6 @@ func (a *agent) handleCallEnd(ctx context.Context, call *call, slot Slot, err er
 // for other containers to become idle or it may wait for resources to become
 // available to launch a new container.
 func (a *agent) getSlot(ctx context.Context, call *call) (Slot, error) {
-	if call.Type == models.TypeAsync {
-		// *) for async, slot deadline is also call.Timeout. This is because we would like to
-		// allocate enough time for docker-pull, slot-wait, docker-start, etc.
-		// and also make sure we have call.Timeout inside the container. Total time
-		// to run an async becomes 2 * call.Timeout.
-		// *) for sync, there's no slot deadline, the timeout is controlled by http-client
-		// context (or runner gRPC context)
-		tmp, cancel := context.WithTimeout(ctx, time.Duration(call.Timeout)*time.Second)
-		ctx = tmp
-		defer cancel()
-	}
-
 	ctx, span := trace.StartSpan(ctx, "agent_get_slot")
 	defer span.End()
 
@@ -372,7 +353,8 @@ func (a *agent) getSlot(ctx context.Context, call *call) (Slot, error) {
 	var isNew bool
 
 	if call.slotHashId == "" {
-		call.slotHashId = getSlotQueueKey(call)
+		slotExtns := a.driver.GetSlotKeyExtensions(call.Extensions())
+		call.slotHashId = getSlotQueueKey(call, slotExtns)
 	}
 
 	call.slots, isNew = a.slotMgr.getSlotQueue(call.slotHashId)
@@ -388,6 +370,14 @@ func (a *agent) getSlot(ctx context.Context, call *call) (Slot, error) {
 
 		caller.done = ctx.Done()
 		caller.notify = make(chan error)
+	}
+
+	// update registry token of the slot queue
+	if call.extensions != nil {
+		registryToken := call.extensions[RegistryToken]
+		if registryToken != "" {
+			call.slots.setAuthToken(registryToken)
+		}
 	}
 
 	if isNew {
@@ -456,12 +446,15 @@ func (a *agent) checkLaunch(ctx context.Context, call *call, caller slotCaller) 
 	}
 
 	state := NewContainerState()
-	state.UpdateState(ctx, ContainerStateWait, call.slots)
+	state.UpdateState(ctx, ContainerStateWait, call)
 
 	mem := call.Memory + uint64(call.TmpFsSize)
 
 	var notifyChans []chan struct{}
 	var tok ResourceToken
+
+	timer := common.NewTimer(a.cfg.HotPoll)
+	defer timer.Stop()
 
 	// WARNING: Tricky flow below. We are here because: isNewContainerNeeded is true,
 	// in other words, we need to launch a new container at this time due to high load.
@@ -482,7 +475,7 @@ func (a *agent) checkLaunch(ctx context.Context, call *call, caller slotCaller) 
 	// need to start a new container, then waiters will wait.
 	select {
 	case tok = <-a.resources.GetResourceToken(ctx, mem, call.CPUs, isNB):
-	case <-time.After(a.cfg.HotPoll):
+	case <-timer.C:
 		// Request routines are polling us with this a.cfg.HotPoll frequency. We can use this
 		// same timer to assume that we waited for cpu/mem long enough. Let's try to evict an
 		// idle container. We do this by submitting a non-blocking request and evicting required
@@ -521,7 +514,7 @@ func (a *agent) checkLaunch(ctx context.Context, call *call, caller slotCaller) 
 		tok.Close()
 	}
 
-	defer state.UpdateState(ctx, ContainerStateDone, call.slots)
+	defer state.UpdateState(ctx, ContainerStateDone, call)
 
 	// IMPORTANT: we wait here for any possible evictions to finalize. Otherwise
 	// hotLauncher could call checkLaunch again and cause a capacity full (http 503)
@@ -550,7 +543,9 @@ func (a *agent) waitHot(ctx context.Context, call *call, caller *slotCaller) (Sl
 	// 1) if we can get a slot immediately, grab it.
 	// 2) if we don't, send a signaller every x msecs until we do.
 
-	sleep := 1 * time.Microsecond // pad, so time.After doesn't send immediately
+	timer := common.NewTimer(1 * time.Microsecond) // pad, so time.After doesn't send immediately
+	defer timer.Stop()
+
 	for {
 		select {
 		case err := <-caller.notify:
@@ -568,12 +563,12 @@ func (a *agent) waitHot(ctx context.Context, call *call, caller *slotCaller) (Sl
 			return nil, ctx.Err()
 		case <-a.shutWg.Closer(): // server shutdown
 			return nil, models.ErrCallTimeoutServerBusy
-		case <-time.After(sleep):
+		case <-timer.C:
 			// ping dequeuer again
 		}
 
 		// set sleep to x msecs after first iteration
-		sleep = a.cfg.HotPoll
+		timer.Reset(a.cfg.HotPoll)
 		// send a notification to launchHot()
 		select {
 		case call.slots.signaller <- caller:
@@ -623,17 +618,16 @@ func (s *hotSlot) exec(ctx context.Context, call *call) error {
 	})
 
 	call.req = call.req.WithContext(ctx) // TODO this is funny biz reed is bad
-	return s.dispatch(ctx, call)
-}
-
-var removeHeaders = map[string]bool{
-	"connection":        true,
-	"keep-alive":        true,
-	"trailer":           true,
-	"transfer-encoding": true,
-	"te":                true,
-	"upgrade":           true,
-	"authorization":     true,
+	err := s.container.BeforeCall(ctx, call.Model(), call.Extensions())
+	if err != nil {
+		return err
+	}
+	err = s.dispatch(ctx, call)
+	err2 := s.container.AfterCall(ctx, call.Model(), call.Extensions())
+	if err == nil {
+		err = err2
+	}
+	return err
 }
 
 func createUDSRequest(ctx context.Context, call *call) *http.Request {
@@ -646,12 +640,13 @@ func createUDSRequest(ctx context.Context, call *call) *http.Request {
 	// it properly and close connections at the end, e.g. when using UDS.
 	req = req.WithContext(ctx)
 
+	// remove transport headers before passing to function
+	common.StripHopHeaders(call.req.Header)
+
 	req.Header = make(http.Header)
 	for k, vs := range call.req.Header {
-		if !removeHeaders[strings.ToLower(k)] {
-			for _, v := range vs {
-				req.Header.Add(k, v)
-			}
+		for _, v := range vs {
+			req.Header.Add(k, v)
 		}
 	}
 
@@ -674,13 +669,26 @@ func (s *hotSlot) dispatch(ctx context.Context, call *call) error {
 	swapBack := s.container.swap(call.stderr, &call.Stats)
 	defer swapBack()
 
-	resp, err := s.container.udsClient.Do(createUDSRequest(ctx, call))
+	req := createUDSRequest(ctx, call)
+
+	var resp *http.Response
+	var err error
+	{ // don't leak ctx scope
+		ctx, span := trace.StartSpan(ctx, "agent_dispatch_uds_do")
+		req = req.WithContext(ctx)
+		resp, err = s.container.udsClient.Do(req)
+		span.End()
+	}
+
 	if err != nil {
 		// IMPORTANT: Container contract: If http-uds errors/timeout, container cannot continue
 		s.trySetError(err)
 		// first filter out timeouts
 		if ctx.Err() == context.DeadlineExceeded {
 			return context.DeadlineExceeded
+		}
+		if strings.Contains(err.Error(), "server response headers exceeded ") {
+			return models.ErrFunctionResponseHdrTooBig
 		}
 		return models.ErrFunctionResponse
 	}
@@ -708,8 +716,7 @@ func (s *hotSlot) dispatch(ctx context.Context, call *call) error {
 func (s *hotSlot) writeResp(ctx context.Context, max uint64, resp *http.Response, w io.Writer) error {
 	rw, ok := w.(http.ResponseWriter)
 	if !ok {
-		// WARNING: this bypasses container contract translation. Assuming this is
-		// async mode, where we are storing response in call.stderr.
+		// TODO(reed): this is strange, we should just enforce the response writer type?
 		w = common.NewClampWriter(w, max, models.ErrFunctionResponseTooBig)
 		return resp.Write(w)
 	}
@@ -731,6 +738,9 @@ func (s *hotSlot) writeResp(ctx context.Context, max uint64, resp *http.Response
 	}
 
 	rw = newSizerRespWriter(max, rw)
+
+	// remove transport headers before copying to client response
+	common.StripHopHeaders(resp.Header)
 
 	// WARNING: is the following header copy safe?
 	// if we're writing directly to the response writer, we need to set headers
@@ -788,8 +798,10 @@ func (a *agent) runHot(ctx context.Context, caller slotCaller, call *call, tok R
 	var cookie drivers.Cookie
 	var err error
 
+	ctrCreatePrepStart := time.Now()
+
 	id := id.New().String()
-	logger := logrus.WithFields(logrus.Fields{"id": id, "app_id": call.AppID, "fn_id": call.FnID, "image": call.Image, "memory": call.Memory, "cpus": call.CPUs, "idle_timeout": call.IdleTimeout})
+	logger := logrus.WithFields(logrus.Fields{"container_id": id, "app_id": call.AppID, "fn_id": call.FnID, "image": call.Image, "memory": call.Memory, "cpus": call.CPUs, "idle_timeout": call.IdleTimeout})
 	ctx, cancel := context.WithCancel(common.WithLogger(ctx, logger))
 
 	initialized := make(chan struct{}) // when closed, container is ready to handle requests
@@ -797,7 +809,7 @@ func (a *agent) runHot(ctx context.Context, caller slotCaller, call *call, tok R
 	errQueue := make(chan error, 1)    // errors to be reflected back to the slot queue
 
 	statsUtilization(ctx, a.resources.GetUtilization())
-	state.UpdateState(ctx, ContainerStateStart, call.slots)
+	state.UpdateState(ctx, ContainerStateStart, call)
 
 	// stack unwind spelled out with strict ordering below.
 	defer func() {
@@ -828,9 +840,10 @@ func (a *agent) runHot(ctx context.Context, caller slotCaller, call *call, tok R
 			}
 			container.Close()
 		}
+
 		tok.Close() // release cpu/mem
 
-		state.UpdateState(ctx, ContainerStateDone, call.slots)
+		state.UpdateState(ctx, ContainerStateDone, call)
 		statsUtilization(ctx, a.resources.GetUtilization())
 	}()
 
@@ -855,7 +868,13 @@ func (a *agent) runHot(ctx context.Context, caller slotCaller, call *call, tok R
 		}
 	}()
 
-	container = newHotContainer(ctx, a.evictor, call, &a.cfg, id, udsWait)
+	// fetch the latest token here. nil check for test pass
+	var authToken string
+	if call.slots != nil {
+		authToken = call.slots.getAuthToken()
+	}
+
+	container = newHotContainer(ctx, a.evictor, call, &a.cfg, id, authToken, udsWait)
 	if container == nil {
 		return
 	}
@@ -864,9 +883,10 @@ func (a *agent) runHot(ctx context.Context, caller slotCaller, call *call, tok R
 	if tryQueueErr(err, errQueue) != nil {
 		return
 	}
-
 	needsPull, err := cookie.ValidateImage(ctx)
+	atomic.StoreInt64(&call.ctrPrepTime, int64(time.Since(ctrCreatePrepStart)))
 	if needsPull {
+		waitStart := time.Now()
 		pullCtx, pullCancel := context.WithTimeout(ctx, a.cfg.HotPullTimeout)
 		err = cookie.PullImage(pullCtx)
 		pullCancel()
@@ -880,11 +900,13 @@ func (a *agent) runHot(ctx context.Context, caller slotCaller, call *call, tok R
 				err = models.ErrCallTimeoutServerBusy
 			}
 		}
+		atomic.StoreInt64(&call.imagePullWaitTime, int64(time.Since(waitStart)))
 	}
 	if tryQueueErr(err, errQueue) != nil {
 		return
 	}
 
+	ctrCreateStart := time.Now()
 	err = cookie.CreateContainer(ctx)
 	if tryQueueErr(err, errQueue) != nil {
 		return
@@ -894,6 +916,7 @@ func (a *agent) runHot(ctx context.Context, caller slotCaller, call *call, tok R
 	if tryQueueErr(err, errQueue) != nil {
 		return
 	}
+	atomic.StoreInt64(&call.ctrCreateTime, int64(time.Since(ctrCreateStart)))
 
 	childDone = make(chan struct{})
 
@@ -907,21 +930,34 @@ func (a *agent) runHot(ctx context.Context, caller slotCaller, call *call, tok R
 		// because monitoring go-routine may pick these events earlier and cancel the ctx.
 		initStart := time.Now()
 
+		timer := common.NewTimer(a.cfg.HotStartTimeout)
+		defer timer.Stop()
+
 		// INIT BARRIER HERE. Wait for the initialization go-routine signal
 		select {
 		case <-initialized:
-			statsContainerUDSInitLatency(ctx, initStart, time.Now(), "initialized")
+			initTime := time.Now() // Declaring this prior to keep the stats in sync
+			statsContainerUDSInitLatency(ctx, initStart, initTime, "initialized")
+			atomic.StoreInt64(&call.initStartTime, int64(initTime.Sub(initStart)))
 		case <-a.shutWg.Closer(): // agent shutdown
-			statsContainerUDSInitLatency(ctx, initStart, time.Now(), "canceled")
+			closerTime := time.Now()
+			statsContainerUDSInitLatency(ctx, initStart, closerTime, "canceled")
+			atomic.StoreInt64(&call.initStartTime, int64(closerTime.Sub(initStart)))
 			return
 		case <-ctx.Done():
-			statsContainerUDSInitLatency(ctx, initStart, time.Now(), "canceled")
+			ctxCancelTime := time.Now()
+			statsContainerUDSInitLatency(ctx, initStart, ctxCancelTime, "canceled")
+			atomic.StoreInt64(&call.initStartTime, int64(ctxCancelTime.Sub(initStart)))
 			return
-		case <-time.After(a.cfg.HotStartTimeout):
-			statsContainerUDSInitLatency(ctx, initStart, time.Now(), "timedout")
+		case <-timer.C:
+			timeoutTime := time.Now()
+			statsContainerUDSInitLatency(ctx, initStart, timeoutTime, "timedout")
+			atomic.StoreInt64(&call.initStartTime, int64(timeoutTime.Sub(initStart)))
 			tryQueueErr(models.ErrContainerInitTimeout, errQueue)
 			return
 		}
+
+		timer.Stop() // no longer needed
 
 		for ctx.Err() == nil {
 			slot := &hotSlot{
@@ -1053,8 +1089,8 @@ func (a *agent) runHotReq(ctx context.Context, call *call, state ContainerState,
 	var err error
 	isFrozen := false
 
-	freezeTimer := time.NewTimer(a.cfg.FreezeIdle)
-	idleTimer := time.NewTimer(time.Duration(call.IdleTimeout) * time.Second)
+	freezeTimer := common.NewTimer(a.cfg.FreezeIdle)
+	idleTimer := common.NewTimer(time.Duration(call.IdleTimeout) * time.Second)
 
 	defer func() {
 		freezeTimer.Stop()
@@ -1065,7 +1101,7 @@ func (a *agent) runHotReq(ctx context.Context, call *call, state ContainerState,
 		}
 	}()
 
-	state.UpdateState(ctx, ContainerStateIdle, call.slots)
+	state.UpdateState(ctx, ContainerStateIdle, call)
 	c.EnableEviction(call)
 
 	s := call.slots.queueSlot(slot)
@@ -1088,7 +1124,7 @@ func (a *agent) runHotReq(ctx context.Context, call *call, state ContainerState,
 					return false
 				}
 				isFrozen = true
-				state.UpdateState(ctx, ContainerStatePaused, call.slots)
+				state.UpdateState(ctx, ContainerStatePaused, call)
 			}
 			continue
 		case <-evicted:
@@ -1126,7 +1162,7 @@ func (a *agent) runHotReq(ctx context.Context, call *call, state ContainerState,
 		isFrozen = false
 	}
 
-	state.UpdateState(ctx, ContainerStateBusy, call.slots)
+	state.UpdateState(ctx, ContainerStateBusy, call)
 	return true
 }
 
@@ -1135,19 +1171,27 @@ func (a *agent) runHotReq(ctx context.Context, call *call, state ContainerState,
 // and stderr can be swapped out by new calls in the container.  input and
 // output must be copied in and out. stdout is sent to stderr.
 type container struct {
-	id         string // contrived
-	image      string
-	env        map[string]string
-	extensions map[string]string
-	memory     uint64
-	cpus       uint64
-	fsSize     uint64
-	tmpFsSize  uint64
-	disableNet bool
-	iofs       iofs
-	logCfg     drivers.LoggerConfig
-	close      func()
-	dockerAuth dockerdriver.Auther
+	id             string // contrived
+	image          string
+	env            map[string]string
+	extensions     map[string]string
+	memory         uint64
+	cpus           uint64
+	fsSize         uint64
+	pids           uint64
+	openFiles      *uint64
+	lockedMemory   *uint64
+	pendingSignals *uint64
+	messageQueue   *uint64
+	tmpFsSize      uint64
+	disableNet     bool
+	iofs           iofs
+	logCfg         drivers.LoggerConfig
+	close          func()
+	beforeCall     drivers.BeforeCall
+	afterCall      drivers.AfterCall
+	dockerAuth     dockerdriver.Auther
+	authToken      string
 
 	stderr io.Writer
 
@@ -1155,14 +1199,16 @@ type container struct {
 
 	// swapMu protects the stats swapping
 	swapMu sync.Mutex
-	stats  *drivers.Stats
+	stats  *driver_stats.Stats
 
 	evictor    Evictor
 	evictToken *EvictToken
 }
 
+var _ drivers.ContainerTask = &container{}
+
 // newHotContainer creates a container that can be used for multiple sequential events
-func newHotContainer(ctx context.Context, evictor Evictor, call *call, cfg *Config, id string, udsWait chan error) *container {
+func newHotContainer(ctx context.Context, evictor Evictor, call *call, cfg *Config, id, authToken string, udsWait chan error) *container {
 
 	var iofs iofs
 	var err error
@@ -1207,18 +1253,36 @@ func newHotContainer(ctx context.Context, evictor Evictor, call *call, cfg *Conf
 		bufs = append(bufs, buf1)
 	}
 
+	baseTransport := &http.Transport{
+		MaxIdleConns:           1,
+		MaxIdleConnsPerHost:    1,
+		MaxResponseHeaderBytes: int64(cfg.MaxHdrResponseSize),
+		IdleConnTimeout:        1 * time.Second, // TODO(jang): revert this to 120s at the point all FDKs are known to be fixed
+		// TODO(reed): since we only allow one, and we close them, this is gratuitous?
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			var d net.Dialer
+			return d.DialContext(ctx, "unix", filepath.Join(iofs.AgentPath(), udsFilename))
+		},
+	}
+
 	return &container{
-		id:         id, // XXX we could just let docker generate ids...
-		image:      call.Image,
-		env:        map[string]string(call.Config),
-		extensions: call.extensions,
-		memory:     call.Memory,
-		cpus:       uint64(call.CPUs),
-		fsSize:     cfg.MaxFsSize,
-		tmpFsSize:  uint64(call.TmpFsSize),
-		disableNet: call.disableNet,
-		iofs:       iofs,
-		dockerAuth: call.dockerAuth,
+		id:             id, // XXX we could just let docker generate ids...
+		image:          call.Image,
+		env:            cloneStrMap(call.Config),     // avoid data race
+		extensions:     cloneStrMap(call.extensions), // avoid date race
+		memory:         call.Memory,
+		cpus:           uint64(call.CPUs),
+		fsSize:         cfg.MaxFsSize,
+		pids:           uint64(cfg.MaxPIDs),
+		openFiles:      cfg.MaxOpenFiles,
+		lockedMemory:   cfg.MaxLockedMemory,
+		pendingSignals: cfg.MaxPendingSignals,
+		messageQueue:   cfg.MaxMessageQueue,
+		tmpFsSize:      uint64(call.TmpFsSize),
+		disableNet:     call.disableNet,
+		iofs:           iofs,
+		dockerAuth:     call.dockerAuth,
+		authToken:      authToken,
 		logCfg: drivers.LoggerConfig{
 			URL: strings.TrimSpace(call.SyslogURL),
 			Tags: []drivers.LoggerTag{
@@ -1228,18 +1292,17 @@ func newHotContainer(ctx context.Context, evictor Evictor, call *call, cfg *Conf
 		},
 		stderr: stderr,
 		udsClient: http.Client{
-			Transport: &http.Transport{
-				MaxIdleConns:        1,
-				MaxIdleConnsPerHost: 1,
-				// XXX(reed): other settings ?
-				IdleConnTimeout: 1 * time.Second,
-				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-					var d net.Dialer
-					return d.DialContext(ctx, "unix", filepath.Join(iofs.AgentPath(), udsFilename))
-				},
+			// use this transport so we can trace the requests to container, handy for debugging...
+			Transport: &ochttp.Transport{
+				NewClientTrace: ochttp.NewSpanAnnotatingClientTrace,
+				Propagation:    noopOCHTTPFormat{}, // we do NOT want to send our tracers to user function, they default to b3
+				Base:           baseTransport,
+				// NOTE: the global trace sampler will be used, this is what we want for now at least
 			},
 		},
-		evictor: evictor,
+		evictor:    evictor,
+		beforeCall: func(context.Context, *models.Call, drivers.CallExtensions) error { return nil },
+		afterCall:  func(context.Context, *models.Call, drivers.CallExtensions) error { return nil },
 		close: func() {
 			stderr.Close()
 			for _, b := range bufs {
@@ -1248,11 +1311,24 @@ func newHotContainer(ctx context.Context, evictor Evictor, call *call, cfg *Conf
 			if err := iofs.Close(); err != nil {
 				logger.WithError(err).Error("Error closing IOFS")
 			}
+			baseTransport.CloseIdleConnections()
 		},
 	}
 }
 
-func (c *container) swap(stderr io.Writer, cs *drivers.Stats) func() {
+var _ propagation.HTTPFormat = noopOCHTTPFormat{}
+
+// we do not want to pass these to the user functions, since they're our internal traces...
+// it is useful for debugging, admittedly, we could make it more friendly for OSS debugging...
+type noopOCHTTPFormat struct{}
+
+func (noopOCHTTPFormat) SpanContextFromRequest(req *http.Request) (sc trace.SpanContext, ok bool) {
+	// our transport isn't receiving requests anyway
+	return trace.SpanContext{}, false
+}
+func (noopOCHTTPFormat) SpanContextToRequest(sc trace.SpanContext, req *http.Request) {}
+
+func (c *container) swap(stderr io.Writer, cs *driver_stats.Stats) func() {
 	// if they aren't using a ghost writer, the logs are disabled, we can skip swapping
 	gw, ok := c.stderr.(common.GhostWriter)
 	var ostderr io.Writer
@@ -1285,6 +1361,11 @@ func (c *container) EnvVars() map[string]string         { return c.env }
 func (c *container) Memory() uint64                     { return c.memory * 1024 * 1024 } // convert MB
 func (c *container) CPUs() uint64                       { return c.cpus }
 func (c *container) FsSize() uint64                     { return c.fsSize }
+func (c *container) PIDs() uint64                       { return c.pids }
+func (c *container) OpenFiles() *uint64                 { return c.openFiles }
+func (c *container) LockedMemory() *uint64              { return c.lockedMemory }
+func (c *container) PendingSignals() *uint64            { return c.pendingSignals }
+func (c *container) MessageQueue() *uint64              { return c.messageQueue }
 func (c *container) TmpFsSize() uint64                  { return c.tmpFsSize }
 func (c *container) Extensions() map[string]string      { return c.extensions }
 func (c *container) LoggerConfig() drivers.LoggerConfig { return c.logCfg }
@@ -1294,7 +1375,7 @@ func (c *container) UDSDockerDest() string              { return iofsDockerMount
 func (c *container) DisableNet() bool                   { return c.disableNet }
 
 // WriteStat publishes each metric in the specified Stats structure as a histogram metric
-func (c *container) WriteStat(ctx context.Context, stat drivers.Stat) {
+func (c *container) WriteStat(ctx context.Context, stat driver_stats.Stat) {
 	for key, value := range stat.Metrics {
 		if m, ok := dockerMeasures[key]; ok {
 			stats.Record(ctx, m.M(int64(value)))
@@ -1352,6 +1433,29 @@ func (c *container) Close() {
 	}
 }
 
+// WrapClose adds additional behaviour to the ContainerTask Close() call
+func (c *container) WrapClose(wrapper func(closer func()) func()) {
+	c.close = wrapper(c.close)
+}
+
+func (c *container) BeforeCall(ctx context.Context, call *models.Call, extn drivers.CallExtensions) error {
+	return c.beforeCall(ctx, call, extn)
+}
+
+// WrapBeforeCall adds additional behaviour to any BeforeCall invocation
+func (c *container) WrapBeforeCall(wrapper func(before drivers.BeforeCall) drivers.BeforeCall) {
+	c.beforeCall = wrapper(c.beforeCall)
+}
+
+func (c *container) AfterCall(ctx context.Context, call *models.Call, extn drivers.CallExtensions) error {
+	return c.afterCall(ctx, call, extn)
+}
+
+// WrapClose adds additional behaviour to the ContainerTask Close() call
+func (c *container) WrapAfterCall(wrapper func(after drivers.AfterCall) drivers.AfterCall) {
+	c.afterCall = wrapper(c.afterCall)
+}
+
 // GetEvictChan returns a channel that closes if an eviction occurs. Do not
 // refer to the same channel after calls to EnableEviction/DisableEviction flags or Close().
 func (c *container) GetEvictChan() chan struct{} {
@@ -1370,12 +1474,19 @@ func (c *container) DockerAuth(ctx context.Context, image string) (*docker.AuthC
 		return c.dockerAuth.DockerAuth(ctx, image)
 	}
 
-	// TODO(reed): kill this after using that
-	registryToken := c.extensions[RegistryToken]
+	registryToken := c.authToken
 	if registryToken != "" {
 		return &docker.AuthConfiguration{
 			RegistryToken: registryToken,
 		}, nil
 	}
 	return nil, nil
+}
+
+func cloneStrMap(src map[string]string) map[string]string {
+	dst := make(map[string]string, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }

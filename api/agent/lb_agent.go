@@ -20,7 +20,6 @@ import (
 
 type lbAgent struct {
 	cfg           Config
-	cda           CallHandler
 	callListeners []fnext.CallListener
 	rp            pool.RunnerPool
 	placer        pool.Placer
@@ -96,7 +95,7 @@ func WithLBCallOptions(opts ...CallOpt) LBAgentOption {
 
 // NewLBAgent creates an Agent that knows how to load-balance function calls
 // across a group of runner nodes.
-func NewLBAgent(da CallHandler, rp pool.RunnerPool, p pool.Placer, options ...LBAgentOption) (Agent, error) {
+func NewLBAgent(rp pool.RunnerPool, p pool.Placer, options ...LBAgentOption) (Agent, error) {
 
 	// Yes, LBAgent and Agent both use a Config.
 	cfg, err := NewConfig()
@@ -106,7 +105,6 @@ func NewLBAgent(da CallHandler, rp pool.RunnerPool, p pool.Placer, options ...LB
 
 	a := &lbAgent{
 		cfg:    *cfg,
-		cda:    da,
 		rp:     rp,
 		placer: p,
 		shutWg: common.NewWaitGroup(),
@@ -169,10 +167,8 @@ func (a *lbAgent) GetCall(opts ...CallOpt) (Call, error) {
 
 	setupCtx(&c)
 
-	c.handler = a.cda
 	c.ct = a
 	c.stderr = common.NoopReadWriteCloser{}
-	c.slotHashId = getSlotQueueKey(&c)
 	return &c, nil
 }
 
@@ -196,9 +192,19 @@ func (a *lbAgent) Close() error {
 // implements Agent
 func (a *lbAgent) Submit(callI Call) error {
 	call := callI.(*call)
-	ctx, span := trace.StartSpan(call.req.Context(), "agent_submit")
+	ctx, span := trace.StartSpan(call.req.Context(), "lb_agent_submit")
 	defer span.End()
-
+	span.AddAttributes(
+		trace.StringAttribute("fn.call_id", call.ID),
+		trace.StringAttribute("fn.app_id", call.AppID),
+		trace.StringAttribute("fn.fn_id", call.FnID),
+	)
+	rid := common.RequestIDFromContext(ctx)
+	if rid != "" {
+		span.AddAttributes(
+			trace.StringAttribute("fn.rid", rid),
+		)
+	}
 	statsCalls(ctx)
 
 	if !a.shutWg.AddSession(1) {

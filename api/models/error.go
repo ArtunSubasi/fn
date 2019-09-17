@@ -6,11 +6,13 @@ import (
 	"net/http"
 )
 
-// TODO we can put constants all in this file too
 const (
-	maxAppName     = 30
-	maxFnName      = 30
-	MaxTriggerName = 30
+	// MaxLengthAppName is the max length for an app name
+	MaxLengthAppName = 255
+	// MaxLengthFnName is the max length for an fn name
+	MaxLengthFnName = 255
+	// MaxLengthTriggerName is the max length for a trigger name
+	MaxLengthTriggerName = 255
 )
 
 var (
@@ -164,11 +166,15 @@ var (
 
 	ErrDockerPullTimeout = ferr{
 		code:  http.StatusGatewayTimeout,
-		error: errors.New("Docker pull timed out"),
+		error: errors.New("Image pull timed out"),
 	}
 	ErrFunctionResponseTooBig = ferr{
 		code:  http.StatusBadGateway,
-		error: fmt.Errorf("function response too large"),
+		error: fmt.Errorf("function response body too large"),
+	}
+	ErrFunctionResponseHdrTooBig = ferr{
+		code:  http.StatusBadGateway,
+		error: fmt.Errorf("function response header too large"),
 	}
 	ErrFunctionResponse = ferr{
 		code:  http.StatusBadGateway,
@@ -182,6 +188,14 @@ var (
 		code:  http.StatusBadGateway,
 		error: fmt.Errorf("invalid function response"),
 	}
+	ErrFunctionPrematureWrite = ferr{
+		code:  http.StatusBadGateway,
+		error: fmt.Errorf("function invoked write before receiving entire request"),
+	}
+	ErrFunctionWriteRequest = ferr{
+		code:  http.StatusBadGateway,
+		error: fmt.Errorf("function closed pipe while receiving request"),
+	}
 	ErrRequestContentTooBig = ferr{
 		code:  http.StatusRequestEntityTooLarge,
 		error: fmt.Errorf("Request content too large"),
@@ -192,11 +206,16 @@ var (
 	}
 	ErrContainerInitFail = ferr{
 		code:  http.StatusBadGateway,
-		error: errors.New("container failed to initialize, please ensure you are using the latest fdk / format and check the logs"),
+		error: errors.New("Container failed to initialize, please ensure you are using the latest fdk and check the logs"),
 	}
 	ErrContainerInitTimeout = ferr{
 		code:  http.StatusGatewayTimeout,
-		error: errors.New("Container initialization timed out, please ensure you are using the latest fdk / format and check the logs"),
+		error: errors.New("Container initialization timed out, please ensure you are using the latest fdk and check the logs"),
+	}
+
+	ErrSyslogUnavailable = ferr{
+		code:  http.StatusInternalServerError,
+		error: errors.New("Syslog Unavailable"),
 	}
 )
 
@@ -239,9 +258,8 @@ func GetAPIErrorCode(e error) int {
 // APIError but distinguishes fault to function specific errors
 type FuncError interface {
 	APIError
-
-	// hidden method needed for duck typing
-	userError()
+	// no-op method (needed to make the interface unique)
+	ImplementsFuncError()
 }
 
 type ferr struct {
@@ -252,8 +270,8 @@ type ferr struct {
 var _ FuncError = ferr{}
 var _ APIError = ferr{}
 
-func (e ferr) userError() {}
-func (e ferr) Code() int  { return e.code }
+func (e ferr) ImplementsFuncError() {}
+func (e ferr) Code() int            { return e.code }
 
 // NewFuncError returns a FuncError
 func NewFuncError(err APIError) error { return ferr{code: err.Code(), error: err} }

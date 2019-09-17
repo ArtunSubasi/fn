@@ -138,6 +138,7 @@ func (c *mockRunnerCall) AddUserExecutionTime(dur time.Duration) {
 		c.userExecTime = new(time.Duration)
 	}
 	*c.userExecTime += dur
+	c.Model().ExecutionDuration = *c.userExecTime
 }
 
 func (c *mockRunnerCall) GetUserExecutionTime() *time.Duration {
@@ -288,7 +289,7 @@ func ModifyCallRequest(callType string) CallOpt {
 }
 func TestGetCallSetOpts(t *testing.T) {
 	expected := models.TypeSync
-	a, err := NewLBAgent(nil, nil, nil)
+	a, err := NewLBAgent(nil, nil)
 	if err != nil {
 		t.Fatalf("Unexpected error in creating LB Agent, %s", err.Error())
 	}
@@ -306,7 +307,7 @@ func TestGetCallSetOpts(t *testing.T) {
 // We verify that we can add callOptions which are executed after the option supplied to  GetCall
 func TestWithLBCallOptions(t *testing.T) {
 	expected := models.TypeDetached
-	a, err := NewLBAgent(nil, nil, nil, WithLBCallOptions(ModifyCallRequest(expected)))
+	a, err := NewLBAgent(nil, nil, WithLBCallOptions(ModifyCallRequest(expected)))
 	if err != nil {
 		t.Fatalf("Unexpected error in creating LB Agent, %s", err.Error())
 	}

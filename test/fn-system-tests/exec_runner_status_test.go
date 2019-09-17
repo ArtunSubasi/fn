@@ -3,10 +3,8 @@ package tests
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -14,12 +12,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fnproject/fn/api/agent/grpc"
+	runner "github.com/fnproject/fn/api/agent/grpc"
 	"google.golang.org/grpc"
 
 	"github.com/fnproject/fn/api/id"
 	"github.com/fnproject/fn/api/models"
 	"github.com/fnproject/fn/api/runnerpool"
+	pb_empty "github.com/golang/protobuf/ptypes/empty"
 )
 
 func callFN(ctx context.Context, u string, content io.Reader, output io.Writer, invokeType string) (*http.Response, error) {
@@ -271,6 +270,48 @@ func TestExecuteRunnerStatusNoNet(t *testing.T) {
 
 }
 
+// Test custom health checker scenarios
+func TestCustomHealthChecker(t *testing.T) {
+	buf := setLogBuffer()
+	defer func() {
+		if t.Failed() {
+			t.Log(buf.String())
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	r := "127.0.0.1:9191"
+	conn, err := grpc.Dial(r, grpc.WithInsecure())
+	if err != nil {
+		t.Fatalf("Failed to dial into runner %s due to err=%+v", r, err)
+	}
+	client := runner.NewRunnerProtocolClient(conn)
+	status, err := client.Status(ctx, &pb_empty.Empty{})
+	if err != nil {
+		t.Fatalf("Status check failed due to err=%+v", err)
+	}
+	if status.CustomStatus == nil || status.CustomStatus["custom"] != "works" {
+		t.Fatalf("Custom status did not match expected status actual=%+v", status.CustomStatus)
+	}
+
+	// Let status hc caches expire.
+	select {
+	case <-time.After(time.Duration(2 * time.Second)):
+	case <-ctx.Done():
+		t.Fatal("Timeout")
+	}
+	shouldCustomHealthCheckerFail = true
+	defer func() { shouldCustomHealthCheckerFail = false }()
+	status, err = client.Status(ctx, &pb_empty.Empty{})
+	if err != nil {
+		t.Fatalf("Status check failed due to err=%+v", err)
+	}
+	if status.ErrorCode != 450 {
+		t.Fatalf("Custom status check should have failed with 450 but actual status was %+v", status)
+	}
+}
+
 func TestConfigureRunner(t *testing.T) {
 	buf := setLogBuffer()
 	defer func() {
@@ -296,18 +337,71 @@ func TestConfigureRunner(t *testing.T) {
 		t.Fatalf("Failed to configure runner due to %+v", err)
 	}
 
-	b, err := ioutil.ReadFile(ConfigFile)
-	if err != nil {
-		t.Fatalf("Failed to read configuration file due to %+v", err)
+	if configureRunnerSetsThis == nil {
+		t.Fatal("Configuration was not handled as expected")
 	}
-	os.Remove(ConfigFile)
+	if _, ok := configureRunnerSetsThis["domain"]; !ok {
+		t.Fatalf("Configuration was not handled as expected")
+	}
+}
 
-	config = make(map[string]string)
-	json.Unmarshal(b, &config)
-	if _, ok := config["domain"]; !ok {
-		t.Fatalf("Configuration file not written as expected")
+func TestExampleLogStreamer(t *testing.T) {
+	buf := setLogBuffer()
+	defer func() {
+		if t.Failed() {
+			t.Log(buf.String())
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	r := "127.0.0.1:9193"
+	conn, err := grpc.Dial(r, grpc.WithInsecure())
+	if err != nil {
+		t.Fatalf("Failed to dial into runner %s due to err=%+v", r, err)
 	}
-	if _, ok := config["company"]; !ok {
-		t.Fatalf("Configuration file not written as expected")
+	client := runner.NewRunnerProtocolClient(conn)
+
+	logStream, err := client.StreamLogs(ctx)
+	if err != nil {
+		t.Fatalf("Failed to configure runner due to %+v", err)
 	}
+
+	start := runner.LogRequestMsg_Start{}
+	ack := runner.LogRequestMsg_Ack{}
+
+	err = logStream.Send(&runner.LogRequestMsg{Body: &runner.LogRequestMsg_Start_{Start: &start}})
+	if err != nil {
+		t.Fatalf("Failed to send start session %+v", err)
+	}
+
+	err = logStream.Send(&runner.LogRequestMsg{Body: &runner.LogRequestMsg_Ack_{Ack: &ack}})
+	if err != nil {
+		t.Fatalf("Failed to send ack %+v", err)
+	}
+
+	resp, err := logStream.Recv()
+	if err != nil {
+		t.Fatalf("Failed to get logs %+v", err)
+	}
+
+	t.Logf("Got log msg %+v", resp)
+
+	cont := resp.Data[0]
+	if cont == nil || cont.ApplicationId != "app1" || cont.FunctionId != "fun1" || cont.ContainerId != "container1" {
+		t.Fatalf("Bad container data %+v", cont)
+	}
+
+	req := cont.Data[0]
+	if req == nil || req.RequestId != "101" {
+		t.Fatalf("Bad request data %+v", req)
+	}
+
+	now := time.Now().UnixNano() / int64(time.Millisecond)
+
+	data := req.Data[0]
+	if data == nil || data.Timestamp > now || data.Source != runner.LogResponseMsg_Container_Request_Line_STDOUT {
+		t.Fatalf("Bad log data %+v", data)
+	}
+
 }

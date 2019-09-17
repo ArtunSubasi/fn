@@ -3,16 +3,13 @@
 package drivers
 
 import (
-	"bytes"
 	"context"
-	"database/sql/driver"
-	"encoding/json"
-	"fmt"
 	"io"
 	"strings"
-	"time"
 
+	"github.com/fnproject/fn/api/agent/drivers/stats"
 	"github.com/fnproject/fn/api/common"
+	"github.com/fnproject/fn/api/models"
 )
 
 // A DriverCookie identifies a unique request to run a task.
@@ -78,6 +75,10 @@ type Driver interface {
 	// Set image pull retry policy and retriable error checker
 	SetPullImageRetryPolicy(policy common.BackOffConfig, checker RetryErrorChecker) error
 
+	// Get serialized string of fields in call extn that determines if we can use
+	// an existing hot container slot or pull a new image and start a container
+	GetSlotKeyExtensions(extn map[string]string) string
+
 	// close & shutdown the driver
 	Close() error
 }
@@ -131,7 +132,7 @@ type ContainerTask interface {
 	Logger() (stdout, stderr io.Writer)
 
 	// WriteStat writes a single Stat, implementation need not be thread safe.
-	WriteStat(context.Context, Stat)
+	WriteStat(context.Context, stats.Stat)
 
 	// Volumes returns an array of 2-element tuples indicating storage volume mounts.
 	// The first element is the path on the host, and the second element is the
@@ -148,6 +149,27 @@ type ContainerTask interface {
 	// Filesystem size limit for the container, in megabytes.
 	FsSize() uint64
 
+	// PIDs defines the max number of PIDs allowed for the container to use. 0
+	// is unlimited.
+	PIDs() uint64
+
+	// OpenFiles defines the max number of files that the process in the
+	// function is allowed to open. Return nil for the default value from the
+	// host.
+	OpenFiles() *uint64
+
+	// LockedMemory maximum number of bytes of memory that may be locked into
+	// RAM. Return nil for the default value from the host.
+	LockedMemory() *uint64
+
+	// PendingSignals limit on the number of signals that may be queued. Return
+	// nil for the default value from the host.
+	PendingSignals() *uint64
+
+	// MessageQueue a limit on the number of bytes that can be allocated for
+	// POSIX message queues. Return nil for the default value from the host.
+	MessageQueue() *uint64
+
 	// Tmpfs Filesystem size limit for the container, in megabytes.
 	TmpFsSize() uint64
 
@@ -161,6 +183,11 @@ type ContainerTask interface {
 	// Close is used to perform cleanup after task execution.
 	// Close should be safe to call multiple times.
 	Close()
+
+	// AddCloseWrapper is used to add additional cleanup to a task.
+	// The original close operation is passed to the wrapping factory.
+	// Implementation need not be thread-safe.
+	WrapClose(func(closer func()) func())
 
 	// Extensions are extra driver specific configuration options. They should be
 	// more specific but it's easier to be lazy.
@@ -181,55 +208,30 @@ type ContainerTask interface {
 
 	// Returns true if network is disabled.
 	DisableNet() bool
+
+	// BeforeCall is invoked just prior to running an invocation.
+	// The Task is definitely going to be used for this invocation.
+	// Invocation extensions are passed to the Before and After calls
+	BeforeCall(context.Context, *models.Call, CallExtensions) error
+
+	// WrapBeforeCall can add additional pre-call behaviour to be added.
+	// This should be called once per ContainerTaskand applies to all successive calls
+	// that utilise this task
+	WrapBeforeCall(func(BeforeCall) BeforeCall)
+
+	// AfterCall is invoked just after an invocation is finished,
+	// providing that BeforeCall returned without an error
+	AfterCall(context.Context, *models.Call, CallExtensions) error
+
+	// WrapBeforeCall can add additional post-call behaviour to be added.
+	// This should be called once per ContainerTask and applies to all successive calls
+	// that utilise this task
+	WrapAfterCall(func(AfterCall) AfterCall)
 }
 
-// Stat is a bucket of stats from a driver at a point in time for a certain task.
-type Stat struct {
-	Timestamp common.DateTime   `json:"timestamp"`
-	Metrics   map[string]uint64 `json:"metrics"`
-}
-
-// Stats is a list of Stat, notably implements sql.Valuer
-type Stats []Stat
-
-// implements sql.Valuer, returning a string
-func (s Stats) Value() (driver.Value, error) {
-	if len(s) < 1 {
-		return driver.Value(string("")), nil
-	}
-	var b bytes.Buffer
-	err := json.NewEncoder(&b).Encode(s)
-	// return a string type
-	return driver.Value(b.String()), err
-}
-
-// implements sql.Scanner
-func (s *Stats) Scan(value interface{}) error {
-	if value == nil {
-		*s = nil
-		return nil
-	}
-	bv, err := driver.String.ConvertValue(value)
-	if err == nil {
-		var b []byte
-		switch x := bv.(type) {
-		case []byte:
-			b = x
-		case string:
-			b = []byte(x)
-		}
-
-		if len(b) > 0 {
-			return json.Unmarshal(b, s)
-		}
-
-		*s = nil
-		return nil
-	}
-
-	// otherwise, return an error
-	return fmt.Errorf("stats invalid db format: %T %T value, err: %v", value, bv, err)
-}
+type CallExtensions = map[string]string
+type BeforeCall = func(context.Context, *models.Call, CallExtensions) error
+type AfterCall = func(context.Context, *models.Call, CallExtensions) error
 
 // TODO: ensure some type is applied to these statuses.
 const (
@@ -247,107 +249,44 @@ const (
 type Config struct {
 	// TODO this should all be driver-specific config and not in the
 	// driver package itself. fix if we ever one day try something else
-	Docker               string `json:"docker"`
-	DockerNetworks       string `json:"docker_networks"`
-	DockerLoadFile       string `json:"docker_load_file"`
-	ServerVersion        string `json:"server_version"`
-	PreForkPoolSize      uint64 `json:"pre_fork_pool_size"`
-	PreForkImage         string `json:"pre_fork_image"`
-	PreForkCmd           string `json:"pre_fork_cmd"`
-	PreForkUseOnce       uint64 `json:"pre_fork_use_once"`
-	PreForkNetworks      string `json:"pre_fork_networks"`
-	MaxTmpFsInodes       uint64 `json:"max_tmpfs_inodes"`
-	EnableReadOnlyRootFs bool   `json:"enable_readonly_rootfs"`
-	ContainerLabelTag    string `json:"container_label_tag"`
-	InstanceId           string `json:"instance_id"`
-	ImageCleanMaxSize    uint64 `json:"image_clean_max_size"`
-	ImageCleanExemptTags string `json:"image_clean_exempt_tags"`
-	ImageEnableVolume    bool   `json:"image_enable_volume"`
-}
-
-func average(samples []Stat) (Stat, bool) {
-	l := len(samples)
-	if l == 0 {
-		return Stat{}, false
-	} else if l == 1 {
-		return samples[0], true
-	}
-
-	s := Stat{
-		Metrics: samples[0].Metrics, // Recycle Metrics map from first sample
-	}
-	t := time.Time(samples[0].Timestamp).UnixNano() / int64(l)
-	for _, sample := range samples[1:] {
-		t += time.Time(sample.Timestamp).UnixNano() / int64(l)
-		for k, v := range sample.Metrics {
-			s.Metrics[k] += v
-		}
-	}
-
-	s.Timestamp = common.DateTime(time.Unix(0, t))
-	for k, v := range s.Metrics {
-		s.Metrics[k] = v / uint64(l)
-	}
-	return s, true
-}
-
-// Decimate will down sample to a max number of points in a given sample by
-// averaging samples together. i.e. max=240, if we have 240 samples, return
-// them all, if we have 480 samples, every 2 samples average them (and time
-// distance), and return 240 samples. This is relatively naive and if len(in) >
-// max, <= max points will be returned, not necessarily max: length(out) =
-// ceil(length(in)/max) -- feel free to fix this, setting a relatively high max
-// will allow good enough granularity at higher lengths, i.e. for max of 1 hour
-// tasks, sampling every 1s, decimate will return 15s samples if max=240.
-// Large gaps in time between samples (a factor > (last-start)/max) will result
-// in a shorter list being returned to account for lost samples.
-// Decimate will modify the input list for efficiency, it is not copy safe.
-// Input must be sorted by timestamp or this will fail gloriously.
-func Decimate(maxSamples int, stats []Stat) []Stat {
-	if len(stats) <= maxSamples {
-		return stats
-	} else if maxSamples <= 0 { // protect from nefarious input
-		return nil
-	}
-
-	start := time.Time(stats[0].Timestamp)
-	window := time.Time(stats[len(stats)-1].Timestamp).Sub(start) / time.Duration(maxSamples)
-
-	nextEntry, current := 0, start // nextEntry is the index tracking next Stats record location
-	for x := 0; x < len(stats); {
-		isLastEntry := nextEntry == maxSamples-1 // Last bin is larger than others to handle imprecision
-
-		var samples []Stat
-		for offset := 0; x+offset < len(stats); offset++ { // Iterate through samples until out of window
-			if !isLastEntry && time.Time(stats[x+offset].Timestamp).After(current.Add(window)) {
-				break
-			}
-			samples = stats[x : x+offset+1]
-		}
-
-		x += len(samples)                      // Skip # of samples for next window
-		if entry, ok := average(samples); ok { // Only record Stat if 1+ samples exist
-			stats[nextEntry] = entry
-			nextEntry++
-		}
-
-		current = current.Add(window)
-	}
-	return stats[:nextEntry] // Return slice of []Stats that was modified with averages
+	Docker                        string `json:"docker"`
+	DockerNetworks                string `json:"docker_networks"`
+	DockerLoadFile                string `json:"docker_load_file"`
+	ServerVersion                 string `json:"server_version"`
+	PreForkPoolSize               uint64 `json:"pre_fork_pool_size"`
+	PreForkImage                  string `json:"pre_fork_image"`
+	PreForkCmd                    string `json:"pre_fork_cmd"`
+	PreForkUseOnce                uint64 `json:"pre_fork_use_once"`
+	PreForkNetworks               string `json:"pre_fork_networks"`
+	MaxTmpFsInodes                uint64 `json:"max_tmpfs_inodes"`
+	EnableReadOnlyRootFs          bool   `json:"enable_readonly_rootfs"`
+	ContainerLabelTag             string `json:"container_label_tag"`
+	InstanceId                    string `json:"instance_id"`
+	ImageCleanMaxSize             uint64 `json:"image_clean_max_size"`
+	ImageCleanExemptTags          string `json:"image_clean_exempt_tags"`
+	ImageEnableVolume             bool   `json:"image_enable_volume"`
+	DisableUnprivilegedContainers bool   `json:"disable_unprivileged_containers"`
 }
 
 // https://github.com/fsouza/go-dockerclient/blob/master/misc.go#L166
-func parseRepositoryTag(repoTag string) (repository string, tag string) {
-	parts := strings.SplitN(repoTag, "@", 2)
+func parseRepositoryTag(repoTag string) (repository, tag string) {
+	parts := strings.Split(repoTag, "@")
+	var digest string
+	if len(parts) == 2 {
+		digest = parts[1]
+	}
 	repoTag = parts[0]
 	n := strings.LastIndex(repoTag, ":")
 	if n < 0 {
-		return repoTag, ""
+		return repoTag, digest
+	}
+	if digest != "" {
+		return repoTag[:n], digest
 	}
 	if tag := repoTag[n+1:]; !strings.Contains(tag, "/") {
 		return repoTag[:n], tag
 	}
-	return repoTag, ""
+	return repoTag, digest
 }
 
 func ParseImage(image string) (registry, repo, tag string) {

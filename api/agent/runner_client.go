@@ -6,10 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
 
+	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -119,28 +121,36 @@ func TranslateGRPCStatusToRunnerStatus(status *pb.RunnerStatus) *pool.RunnerStat
 	// These are nanosecond monotonic deltas, they cannot be zero if they were transmitted.
 	runnerSchedLatency := time.Duration(status.GetSchedulerDuration())
 	runnerExecLatency := time.Duration(status.GetExecutionDuration())
+	ctrPrepDuration := time.Duration(status.GetCtrPrepDuration())
+	ctrCreateDuration := time.Duration(status.GetCtrCreateDuration())
+	imagePullWaitDuration := time.Duration(status.GetImagePullWaitDuration())
+	initStartTime := time.Duration(status.GetInitStartTime())
 
 	creat, _ := common.ParseDateTime(status.CreatedAt)
 	start, _ := common.ParseDateTime(status.StartedAt)
 	compl, _ := common.ParseDateTime(status.CompletedAt)
 
 	return &pool.RunnerStatus{
-		ActiveRequestCount: status.Active,
-		RequestsReceived:   status.RequestsReceived,
-		RequestsHandled:    status.RequestsHandled,
-		StatusFailed:       status.Failed,
-		KdumpsOnDisk:       status.KdumpsOnDisk,
-		Cached:             status.Cached,
-		StatusId:           status.Id,
-		Details:            status.Details,
-		ErrorCode:          status.ErrorCode,
-		ErrorStr:           status.ErrorStr,
-		CreatedAt:          creat,
-		StartedAt:          start,
-		CompletedAt:        compl,
-		SchedulerDuration:  runnerSchedLatency,
-		ExecutionDuration:  runnerExecLatency,
-		IsNetworkDisabled:  status.IsNetworkDisabled,
+		ActiveRequestCount:    status.Active,
+		RequestsReceived:      status.RequestsReceived,
+		RequestsHandled:       status.RequestsHandled,
+		StatusFailed:          status.Failed,
+		KdumpsOnDisk:          status.KdumpsOnDisk,
+		Cached:                status.Cached,
+		StatusId:              status.Id,
+		Details:               status.Details,
+		ErrorCode:             status.ErrorCode,
+		ErrorStr:              status.ErrorStr,
+		CreatedAt:             creat,
+		StartedAt:             start,
+		CompletedAt:           compl,
+		SchedulerDuration:     runnerSchedLatency,
+		ExecutionDuration:     runnerExecLatency,
+		ImagePullWaitDuration: imagePullWaitDuration,
+		CtrPrepDuration:       ctrPrepDuration,
+		CtrCreateDuration:     ctrCreateDuration,
+		InitStartTime:         initStartTime,
+		IsNetworkDisabled:     status.IsNetworkDisabled,
 	}
 }
 
@@ -231,9 +241,12 @@ func (r *gRPCRunner) TryExec(ctx context.Context, call pool.RunnerCall) (bool, e
 }
 
 func sendToRunner(ctx context.Context, protocolClient pb.RunnerProtocol_EngageClient, runnerAddress string, call pool.RunnerCall) {
+	var errorMsg string
+	var infoMsg string
 	bodyReader := call.RequestBody()
 	writeBuffer := make([]byte, MaxDataChunk)
-
+	_, span := trace.StartSpan(ctx, "send_to_runner", trace.WithSpanKind(trace.SpanKindClient))
+	defer span.End()
 	log := common.Logger(ctx).WithField("runner_addr", runnerAddress)
 	// IMPORTANT: IO Read below can fail in multiple go-routine cases (in retry
 	// case especially if receiveFromRunner go-routine receives a NACK while sendToRunner is
@@ -247,14 +260,17 @@ func sendToRunner(ctx context.Context, protocolClient pb.RunnerProtocol_EngageCl
 		// WARNING: blocking read.
 		n, err := bodyReader.Read(writeBuffer)
 		if err != nil && err != io.EOF {
-			log.WithError(err).Error("Failed to receive data from http client body")
+			errorMsg = "Failed to receive data from http client body"
+			span.SetStatus(trace.Status{Code: int32(trace.StatusCodeDataLoss), Message: errorMsg})
+			log.WithError(err).Error(errorMsg)
 		}
 
 		// any IO error or n == 0 is an EOF for pure-runner
 		isEOF := err != nil || n == 0
 		data := writeBuffer[:n]
-
-		log.Debugf("Sending %d bytes of data isEOF=%v to runner", n, isEOF)
+		infoMsg = fmt.Sprintf("Sending %d bytes of data isEOF=%v to runner", n, isEOF)
+		span.Annotate([]trace.Attribute{trace.StringAttribute("status", infoMsg)}, "")
+		log.Debugf(infoMsg)
 		sendErr := protocolClient.Send(&pb.ClientMsg{
 			Body: &pb.ClientMsg_Data{
 				Data: &pb.DataFrame{
@@ -267,7 +283,9 @@ func sendToRunner(ctx context.Context, protocolClient pb.RunnerProtocol_EngageCl
 			// It's often normal to receive an EOF here as we optimistically start sending body until a NACK
 			// from the runner. Let's ignore EOF and rely on recv side to catch premature EOF.
 			if sendErr != io.EOF {
-				log.WithError(sendErr).Errorf("Failed to send data frame size=%d isEOF=%v", n, isEOF)
+				errorMsg = fmt.Sprintf("Failed to send data frame size=%d isEOF=%v", n, isEOF)
+				span.SetStatus(trace.Status{Code: int32(trace.StatusCodeDataLoss), Message: errorMsg})
+				log.WithError(sendErr).Errorf(errorMsg)
 			}
 			return
 		}
@@ -316,42 +334,36 @@ func recordFinishStats(ctx context.Context, msg *pb.CallFinished, c pool.RunnerC
 	runnerSchedLatency := time.Duration(msg.GetSchedulerDuration())
 	runnerExecLatency := time.Duration(msg.GetExecutionDuration())
 
-	if runnerSchedLatency != 0 || runnerExecLatency != 0 {
-		if runnerSchedLatency != 0 {
-			statsLBAgentRunnerSchedLatency(ctx, runnerSchedLatency)
-		}
-		if runnerExecLatency != 0 {
-			statsLBAgentRunnerExecLatency(ctx, runnerExecLatency)
-			c.AddUserExecutionTime(runnerExecLatency)
-		}
-		return
-	}
-
-	// TODO: Remove this once all Runners are upgraded.
-	// Fallback to older Runner response type, where instead of the above duration, formatted-wall-clock
-	// timestamps are present.
-	creatTs := translateDate(msg.GetCreatedAt())
-	startTs := translateDate(msg.GetStartedAt())
-	complTs := translateDate(msg.GetCompletedAt())
-
-	// Validate this as info *is* coming from runner and its local clock.
-	if !creatTs.IsZero() && !startTs.IsZero() && !complTs.IsZero() && !startTs.Before(creatTs) && !complTs.Before(startTs) {
-		runnerSchedLatency := startTs.Sub(creatTs)
-		runnerExecLatency := complTs.Sub(startTs)
-
+	if runnerSchedLatency != 0 {
 		statsLBAgentRunnerSchedLatency(ctx, runnerSchedLatency)
+	}
+	if runnerExecLatency != 0 {
 		statsLBAgentRunnerExecLatency(ctx, runnerExecLatency)
-
 		c.AddUserExecutionTime(runnerExecLatency)
 	}
 }
 
+func cloneHeaders(src http.Header) http.Header {
+	dst := make(http.Header, len(src))
+	for k, vs := range src {
+		for _, v := range vs {
+			dst.Add(k, v)
+		}
+	}
+	return dst
+}
+
 func receiveFromRunner(ctx context.Context, protocolClient pb.RunnerProtocol_EngageClient, runnerAddress string, c pool.RunnerCall, done chan error) {
+	var errorMsg string
+	var infoMsg string
 	w := c.ResponseWriter()
 	defer close(done)
-
+	ctx, span := trace.StartSpan(ctx, "receive_from_runner", trace.WithSpanKind(trace.SpanKindServer))
+	defer span.End()
 	log := common.Logger(ctx).WithField("runner_addr", runnerAddress)
 	statusCode := int32(0)
+	// Make a copy of header to avoid concurrent read/write error when logCallFinish runs.
+	clonedHeaders := cloneHeaders(w.Header())
 	isPartialWrite := false
 
 DataLoop:
@@ -370,8 +382,11 @@ DataLoop:
 		case *pb.RunnerMsg_ResultStart:
 			switch meta := body.ResultStart.Meta.(type) {
 			case *pb.CallResultStart_Http:
-				log.Debugf("Received meta http result from runner Status=%v", meta.Http.StatusCode)
+				infoMsg = fmt.Sprintf("Received meta http result from runner Status=%v", meta.Http.StatusCode)
+				span.Annotate([]trace.Attribute{trace.StringAttribute("status", infoMsg)}, "")
+				log.Debugf(infoMsg)
 				for _, header := range meta.Http.Headers {
+					clonedHeaders.Set(header.Key, header.Value)
 					w.Header().Set(header.Key, header.Value)
 				}
 				if meta.Http.StatusCode > 0 {
@@ -379,18 +394,24 @@ DataLoop:
 					w.WriteHeader(int(meta.Http.StatusCode))
 				}
 			default:
-				log.Errorf("Unhandled meta type in start message: %v", meta)
+				errorMsg = fmt.Sprintf("Unhandled meta type in start message: %v", meta)
+				span.SetStatus(trace.Status{Code: trace.StatusCodeDataLoss, Message: errorMsg})
+				log.Errorf(errorMsg)
 			}
 
 		// May arrive if function has output. We ignore EOF.
 		case *pb.RunnerMsg_Data:
-			log.Debugf("Received data from runner len=%d isEOF=%v", len(body.Data.Data), body.Data.Eof)
+			infoMsg = fmt.Sprintf("Received data from runner len=%d isEOF=%v", len(body.Data.Data), body.Data.Eof)
+			span.Annotate([]trace.Attribute{trace.StringAttribute("status", infoMsg)}, "")
+			log.Debugf(infoMsg)
 			if !isPartialWrite {
 				// WARNING: blocking write
 				n, err := w.Write(body.Data.Data)
 				if n != len(body.Data.Data) {
 					isPartialWrite = true
-					log.WithError(err).Infof("Failed to write full response (%d of %d) to client", n, len(body.Data.Data))
+					errorMsg = fmt.Sprintf("Failed to write full response (%d of %d) to client", n, len(body.Data.Data))
+					span.SetStatus(trace.Status{Code: int32(trace.StatusCodeDataLoss), Message: errorMsg})
+					log.WithError(err).Infof(errorMsg)
 					if err == nil {
 						err = io.ErrShortWrite
 					}
@@ -400,8 +421,26 @@ DataLoop:
 
 		// Finish messages required for finish/finalize the processing.
 		case *pb.RunnerMsg_Finished:
-			logCallFinish(log, body, w.Header(), statusCode)
+			logCallFinish(log, body, clonedHeaders, statusCode)
 			recordFinishStats(ctx, body.Finished, c)
+			span.Annotate([]trace.Attribute{
+				trace.BoolAttribute("error_user", body.Finished.GetErrorUser()),
+				trace.BoolAttribute("success", body.Finished.GetSuccess()),
+				trace.Int64Attribute("execution_duration", body.Finished.GetExecutionDuration()),
+				trace.Int64Attribute("scheduler_duration", body.Finished.GetSchedulerDuration()),
+				trace.Int64Attribute("image_pull_wait", body.Finished.GetImagePullWaitDuration()),
+				trace.Int64Attribute("container_create_duration", body.Finished.GetCtrCreateDuration()),
+				trace.Int64Attribute("container_preparation_duration", body.Finished.GetCtrPrepDuration()),
+				trace.Int64Attribute("init_start", body.Finished.GetInitStartTime()),
+				trace.StringAttribute("completed_at", body.Finished.GetCompletedAt()),
+				trace.StringAttribute("created_at", body.Finished.GetCreatedAt()),
+				trace.StringAttribute("started_at", body.Finished.GetStartedAt()),
+			}, "Runner Execution Details")
+			span.AddAttributes(
+				trace.StringAttribute("image", body.Finished.GetImage()),
+				trace.StringAttribute("fn.call_id", body.Finished.GetDetails()),
+			)
+			span.SetStatus(trace.Status{Code: body.Finished.GetErrorCode(), Message: body.Finished.GetErrorStr()})
 			if !body.Finished.Success {
 				err := parseError(body.Finished)
 				tryQueueError(err, done)
@@ -409,7 +448,9 @@ DataLoop:
 			break DataLoop
 
 		default:
-			log.Errorf("Ignoring unknown message type %T from runner, possible client/server mismatch", body)
+			errorMsg = fmt.Sprintf("Ignoring unknown message type %T from runner, possible client/server mismatch", body)
+			span.SetStatus(trace.Status{Code: trace.StatusCodeUnauthenticated, Message: errorMsg})
+			log.Errorf(errorMsg)
 		}
 	}
 
@@ -434,22 +475,21 @@ DataLoop:
 }
 
 func logCallFinish(log logrus.FieldLogger, msg *pb.RunnerMsg_Finished, headers http.Header, httpStatus int32) {
+	errorCode := msg.Finished.GetErrorCode()
 	errorUser := msg.Finished.GetErrorUser()
 	runnerSuccess := msg.Finished.GetSuccess()
 	logger := log.WithFields(logrus.Fields{
 		"function_error":     msg.Finished.GetErrorStr(),
 		"runner_success":     runnerSuccess,
-		"runner_error_code":  msg.Finished.GetErrorCode(),
+		"runner_error_code":  errorCode,
 		"runner_error_user":  errorUser,
 		"runner_http_status": httpStatus,
 		"fn_http_status":     headers.Get("Fn-Http-Status"),
 	})
-	if runnerSuccess {
-		logger.Info("Call finished successfully")
-	} else if errorUser {
-		logger.Info("Call finished with user error")
+	if !runnerSuccess && !errorUser && errorCode != http.StatusServiceUnavailable {
+		logger.Warn("Call finished")
 	} else {
-		logger.Error("Call finished with platform error")
+		logger.Info("Call finished")
 	}
 }
 

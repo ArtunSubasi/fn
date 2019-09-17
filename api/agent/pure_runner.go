@@ -14,14 +14,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/fnproject/fn/api/agent/grpc"
+	runner "github.com/fnproject/fn/api/agent/grpc"
 	"github.com/fnproject/fn/api/common"
 	"github.com/fnproject/fn/api/id"
 	"github.com/fnproject/fn/api/models"
@@ -29,6 +28,7 @@ import (
 	"github.com/fnproject/fn/grpcutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/sirupsen/logrus"
+	"go.opencensus.io/plugin/ocgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -79,7 +79,9 @@ var (
 type callHandle struct {
 	engagement runner.RunnerProtocol_EngageServer
 	ctx        context.Context
-	c          *call // the agent's version of call
+	sctx       context.Context    // child context for submit
+	scancel    context.CancelFunc // child cancel for submit
+	c          *call              // the agent's version of call
 
 	// For implementing http.ResponseWriter:
 	headers http.Header
@@ -89,14 +91,17 @@ type callHandle struct {
 	shutOnce          sync.Once
 	pipeToFnCloseOnce sync.Once
 
-	outQueue  chan *runner.RunnerMsg
-	doneQueue chan struct{}
-	errQueue  chan error
-	inQueue   chan *runner.ClientMsg
+	outQueue     chan *runner.RunnerMsg
+	doneQueue    chan struct{}
+	errQueue     chan error
+	callErrQueue chan error
+	inQueue      chan *runner.ClientMsg
 
 	// Pipe to push data to the agent Function container
 	pipeToFnW *io.PipeWriter
 	pipeToFnR *io.PipeReader
+
+	eofSeen uint64 // Has pipe sender seen eof?
 }
 
 func NewCallHandle(engagement runner.RunnerProtocol_EngageServer) *callHandle {
@@ -105,17 +110,23 @@ func NewCallHandle(engagement runner.RunnerProtocol_EngageServer) *callHandle {
 	pipeR, pipeW := io.Pipe()
 
 	state := &callHandle{
-		engagement: engagement,
-		ctx:        engagement.Context(),
-		headers:    make(http.Header),
-		status:     200,
-		outQueue:   make(chan *runner.RunnerMsg),
-		doneQueue:  make(chan struct{}),
-		errQueue:   make(chan error, 1), // always allow one error (buffered)
-		inQueue:    make(chan *runner.ClientMsg),
-		pipeToFnW:  pipeW,
-		pipeToFnR:  pipeR,
+		engagement:   engagement,
+		ctx:          engagement.Context(),
+		headers:      make(http.Header),
+		status:       200,
+		outQueue:     make(chan *runner.RunnerMsg),
+		doneQueue:    make(chan struct{}),
+		errQueue:     make(chan error, 1), // always allow one error (buffered)
+		callErrQueue: make(chan error, 1), // only buffer one error
+		inQueue:      make(chan *runner.ClientMsg),
+		pipeToFnW:    pipeW,
+		pipeToFnR:    pipeR,
+		eofSeen:      0,
 	}
+
+	// Wrap parent ctx with a cancel function so we can abort the call if
+	// necessary.
+	state.sctx, state.scancel = context.WithCancel(engagement.Context())
 
 	// spawn one receiver and one sender go-routine.
 	// See: https://grpc.io/docs/reference/go/generated-code.html, which reads:
@@ -218,17 +229,31 @@ func (ch *callHandle) enqueueCallResponse(err error) {
 	var createdAt string
 	var startedAt string
 	var completedAt string
+	var image string
 	var details string
 	var errCode int
 	var errStr string
 	var errUser bool
+	var nErr error
+	var imagePullWaitDuration int64
+	var ctrCreateDuration int64
+	var ctrPrepDuration int64
+	var initStartTime int64
 
 	log := common.Logger(ch.ctx)
 
-	if err != nil {
-		errCode = models.GetAPIErrorCode(err)
-		errStr = err.Error()
-		errUser = models.IsFuncError(err)
+	// If an error was queued to callErrQueue let it take precedence over
+	// the inbound error.
+	select {
+	case nErr = <-ch.callErrQueue:
+	default:
+		nErr = err
+	}
+
+	if nErr != nil {
+		errCode = models.GetAPIErrorCode(nErr)
+		errStr = nErr.Error()
+		errUser = models.IsFuncError(nErr)
 	}
 
 	schedulerDuration, executionDuration := GetCallLatencies(ch.c)
@@ -248,28 +273,36 @@ func (ch *callHandle) enqueueCallResponse(err error) {
 					completedAt = mcall.CompletedAt.String()
 				} else {
 					// IMPORTANT: We punch this in ourselves.
-					// This is because call.End() is executed asynchronously.
 					completedAt = common.DateTime(time.Now()).String()
 				}
 			}
 		}
-
+		image = mcall.Image
 		details = mcall.ID
+		imagePullWaitDuration = ch.c.imagePullWaitTime
+		ctrCreateDuration = ch.c.ctrCreateTime
+		ctrCreateDuration = ch.c.ctrCreateTime
+		initStartTime = ch.c.initStartTime
 	}
 	log.Debugf("Sending Call Finish details=%v", details)
 
 	errTmp := ch.enqueueMsgStrict(&runner.RunnerMsg{
 		Body: &runner.RunnerMsg_Finished{Finished: &runner.CallFinished{
-			Success:           err == nil,
-			Details:           details,
-			ErrorCode:         int32(errCode),
-			ErrorStr:          errStr,
-			CreatedAt:         createdAt,
-			StartedAt:         startedAt,
-			CompletedAt:       completedAt,
-			SchedulerDuration: int64(schedulerDuration),
-			ExecutionDuration: int64(executionDuration),
-			ErrorUser:         errUser,
+			CompletedAt:           completedAt,
+			CreatedAt:             createdAt,
+			CtrCreateDuration:     ctrCreateDuration,
+			CtrPrepDuration:       ctrPrepDuration,
+			Details:               details,
+			ErrorCode:             int32(errCode),
+			ErrorStr:              errStr,
+			ErrorUser:             errUser,
+			ExecutionDuration:     int64(executionDuration),
+			Image:                 image,
+			ImagePullWaitDuration: imagePullWaitDuration,
+			InitStartTime:         initStartTime,
+			SchedulerDuration:     int64(schedulerDuration),
+			StartedAt:             startedAt,
+			Success:               nErr == nil,
 		}}})
 
 	if errTmp != nil {
@@ -281,6 +314,27 @@ func (ch *callHandle) enqueueCallResponse(err error) {
 	if errTmp != nil {
 		log.WithError(errTmp).Infof("enqueueCallResponse Finalize Error details=%v err=%v:%v", details, errCode, errStr)
 	}
+}
+
+// Used to short circuit the error path when its necessary to return a well
+// formed error to the LB and we don't want to complete the call.  Errors
+// qeueued here will supercede any errors returned by the function invocation,
+// so use it carefully.
+func (ch *callHandle) enqueueCallErrorResponse(err error) {
+
+	if err == nil {
+		return
+	}
+
+	// Queue buffers a single error. If it's full, let whatever error arrived
+	// first take precedence.
+	select {
+	case ch.callErrQueue <- err:
+	default:
+	}
+
+	// Cancel the pending call to cause response to get generated faster.
+	ch.scancel()
 }
 
 // spawnPipeToFn pumps data to Function via callHandle io.PipeWriter (pipeToFnW)
@@ -304,11 +358,16 @@ func (ch *callHandle) spawnPipeToFn() chan *runner.DataFrame {
 				if len(data.Data) > 0 {
 					_, err := io.CopyN(ch.pipeToFnW, bytes.NewReader(data.Data), int64(len(data.Data)))
 					if err != nil {
-						ch.shutdown(err)
+						if err == io.ErrClosedPipe || err == io.ErrShortWrite {
+							ch.enqueueCallErrorResponse(models.ErrFunctionWriteRequest)
+						} else {
+							ch.shutdown(err)
+						}
 						return
 					}
 				}
 				if data.Eof {
+					atomic.StoreUint64(&ch.eofSeen, 1)
 					return
 				}
 			}
@@ -382,6 +441,20 @@ func (ch *callHandle) Header() http.Header {
 func (ch *callHandle) WriteHeader(status int) {
 	ch.status = status
 	var err error
+
+	// Ensure that writes occur after all of the incoming data has been
+	// consumed.  If the user's container attempts to write before a Eof
+	// frame has been seen, then return an error.  Only perform this check
+	// for HTTP 200s so that it does not trip on errors or detach mode accept
+	// invocations.
+	if status == http.StatusOK {
+		eofSeen := atomic.LoadUint64(&ch.eofSeen)
+		if eofSeen == 0 {
+			ch.enqueueCallErrorResponse(models.ErrFunctionPrematureWrite)
+			return
+		}
+	}
+
 	ch.headerOnce.Do(func() {
 		// WARNING: we do fetch Status and Headers without
 		// a lock below. This is a problem in agent in general, and needs
@@ -440,6 +513,8 @@ func (ch *callHandle) Write(data []byte) (int, error) {
 	// as there is no point to proceed with the Write
 	select {
 
+	case <-ch.sctx.Done():
+		return 0, io.EOF
 	case <-ch.ctx.Done():
 		return 0, io.EOF
 	case <-ch.doneQueue:
@@ -565,18 +640,25 @@ type statusTracker struct {
 	wait   chan struct{}
 }
 
+// Log Streamer to manage log gRPC interface
+type LogStreamer interface {
+	StreamLogs(runner.RunnerProtocol_StreamLogsServer) error
+}
+
 // pureRunner implements Agent and delegates execution of functions to an internal Agent; basically it wraps around it
 // and provides the gRPC server that implements the LB <-> Runner protocol.
 type pureRunner struct {
-	gRPCServer     *grpc.Server
-	gRPCOptions    []grpc.ServerOption
-	creds          credentials.TransportCredentials
-	a              Agent
-	status         statusTracker
-	callHandleMap  map[string]*callHandle
-	callHandleLock sync.Mutex
-	enableDetach   bool
-	configPath     string
+	gRPCServer              *grpc.Server
+	gRPCOptions             []grpc.ServerOption
+	creds                   credentials.TransportCredentials
+	a                       Agent
+	logStreamer             LogStreamer
+	status                  statusTracker
+	callHandleMap           map[string]*callHandle
+	callHandleLock          sync.Mutex
+	enableDetach            bool
+	configFunc              func(context.Context, *runner.ConfigMsg) (*runner.ConfigStatus, error)
+	customHealthCheckerFunc func(context.Context) (map[string]string, error)
 }
 
 // implements Agent
@@ -663,7 +745,7 @@ func (pr *pureRunner) handleTryCall(tc *runner.TryCall, state *callHandle) error
 	agentCall, err := pr.a.GetCall(FromModelAndInput(&c, state.pipeToFnR),
 		WithLogger(common.NoopReadWriteCloser{}),
 		WithWriter(state),
-		WithContext(state.ctx),
+		WithContext(state.sctx),
 		WithExtensions(tc.GetExtensions()),
 	)
 	if err != nil {
@@ -714,6 +796,7 @@ func (pr *pureRunner) Engage(engagement runner.RunnerProtocol_EngageServer) erro
 		log.Debug("MD is ", md)
 	}
 	state := NewCallHandle(engagement)
+	defer state.scancel()
 
 	tryMsg := state.getTryMsg()
 	if tryMsg != nil {
@@ -800,12 +883,22 @@ func (pr *pureRunner) runStatusCall(ctx context.Context) *runner.RunnerStatus {
 		}
 	}
 
+	var err error
+	// handle custom healthcheck
+	if pr.customHealthCheckerFunc != nil {
+		result.CustomStatus, err = pr.customHealthCheckerFunc(ctx)
+	}
+
+	var agentCall Call
 	var mcall *call
-	agentCall, err := pr.a.GetCall(FromModelAndInput(&c, player),
-		WithLogger(common.NoopReadWriteCloser{}),
-		WithWriter(recorder),
-		WithContext(ctx),
-	)
+	if err == nil {
+		agentCall, err = pr.a.GetCall(FromModelAndInput(&c, player),
+			WithLogger(common.NoopReadWriteCloser{}),
+			WithWriter(recorder),
+			WithContext(ctx),
+		)
+	}
+
 	if err == nil {
 		mcall = agentCall.(*call)
 
@@ -842,10 +935,17 @@ func (pr *pureRunner) runStatusCall(ctx context.Context) *runner.RunnerStatus {
 				result.CompletedAt = c.CompletedAt.String()
 			} else {
 				// IMPORTANT: We punch this in ourselves.
-				// This is because call.End() is executed asynchronously.
 				result.CompletedAt = common.DateTime(time.Now()).String()
 			}
 		}
+	}
+
+	// Loading with runHot metrics if not nil
+	if mcall != nil {
+		result.ImagePullWaitDuration = atomic.LoadInt64(&mcall.imagePullWaitTime)
+		result.CtrCreateDuration = atomic.LoadInt64(&mcall.ctrCreateTime)
+		result.CtrPrepDuration = atomic.LoadInt64(&mcall.ctrPrepTime)
+		result.InitStartTime = atomic.LoadInt64(&mcall.initStartTime)
 	}
 
 	// Status images should not output excessive data since we echo the
@@ -892,6 +992,12 @@ func (pr *pureRunner) fetchStatusCall(ctx context.Context) (*runner.RunnerStatus
 	pr.status.lock.Lock()
 
 	cacheObj = *pr.status.cache // cannot be null
+	// deepcopy of custom healthcheck status is needed
+	cacheObj.CustomStatus = make(map[string]string)
+	for k, v := range pr.status.cache.CustomStatus {
+		cacheObj.CustomStatus[k] = v
+	}
+
 	pr.status.cache.Cached = true
 
 	pr.status.lock.Unlock()
@@ -960,8 +1066,8 @@ func (pr *pureRunner) Status(ctx context.Context, _ *empty.Empty) (*runner.Runne
 		}, nil
 	}
 	status, err := pr.handleStatusCall(ctx)
-	if err != nil {
-		common.Logger(ctx).WithError(err).Errorf("Status call failed result=%+v", status)
+	if err != nil && err != context.Canceled {
+		common.Logger(ctx).WithError(err).Warnf("Status call failed result=%+v", status)
 	}
 
 	cached := "error"
@@ -973,6 +1079,7 @@ func (pr *pureRunner) Status(ctx context.Context, _ *empty.Empty) (*runner.Runne
 		success = strconv.FormatBool(!status.Failed)
 		network = strconv.FormatBool(!status.IsNetworkDisabled)
 	}
+
 	statsStatusCall(ctx, cached, success, network)
 
 	return status, err
@@ -980,36 +1087,19 @@ func (pr *pureRunner) Status(ctx context.Context, _ *empty.Empty) (*runner.Runne
 
 // implements RunnerProtocolServer
 func (pr *pureRunner) ConfigureRunner(ctx context.Context, config *runner.ConfigMsg) (*runner.ConfigStatus, error) {
-	if pr.configPath == "" {
-		return nil, errors.New("runner not configured with configPath")
+	if pr.configFunc == nil {
+		common.Logger(ctx).WithField("config", config.Config).Warn("configFunc was not configured to handle ConfigureRunner")
+		return &runner.ConfigStatus{}, nil
 	}
-	// Marshal config data into json text
-	configBytes, err := json.Marshal(config.Config)
-	if err != nil {
-		common.Logger(ctx).WithError(err).WithField("config", config.Config).Error("Failed to marshal config data")
-		return nil, err
+	return pr.configFunc(ctx, config)
+}
+
+// implements RunnerProtocolServer
+func (pr *pureRunner) StreamLogs(logStream runner.RunnerProtocol_StreamLogsServer) error {
+	if pr.logStreamer != nil {
+		return pr.logStreamer.StreamLogs(logStream)
 	}
-	// Ensure config directory exists
-	configDir := filepath.Dir(pr.configPath)
-	dir, err := os.Stat(configDir)
-	if err != nil {
-		return nil, err
-	}
-	if !dir.IsDir() {
-		return nil, fmt.Errorf("%s is not a directory", configDir)
-	}
-	// Write the config data to a temporary file
-	fileName := filepath.Base(pr.configPath)
-	tempPath := fmt.Sprintf("%s/.%s", configDir, fileName)
-	err = ioutil.WriteFile(tempPath, configBytes, 0600)
-	if err != nil {
-		return nil, err
-	}
-	// rename the temporary file to the config file
-	// this is an atomic operation
-	os.Rename(tempPath, pr.configPath)
-	common.Logger(ctx).WithField("config", config.Config).Info("ConfigureRunner wrote the configuration data")
-	return &runner.ConfigStatus{}, nil
+	return errors.New("runner not configured with logStreamer")
 }
 
 // BeforeCall called before a function is executed
@@ -1035,9 +1125,8 @@ func (pr *pureRunner) AfterCall(ctx context.Context, call *models.Call) error {
 	return nil
 }
 
-func DefaultPureRunner(cancel context.CancelFunc, addr string, da CallHandler, tlsCfg *tls.Config) (Agent, error) {
-
-	agent := New(da)
+func DefaultPureRunner(cancel context.CancelFunc, addr string, tlsCfg *tls.Config) (Agent, error) {
+	agent := New()
 
 	// WARNING: SSL creds are optional.
 	if tlsCfg == nil {
@@ -1065,13 +1154,34 @@ func PureRunnerWithStatusNetworkEnabler(barrierPath string) PureRunnerOption {
 	}
 }
 
-func PureRunnerWithConfigPath(configPath string) PureRunnerOption {
+func PureRunnerWithLogStreamer(logStreamer LogStreamer) PureRunnerOption {
 	return func(pr *pureRunner) error {
-		// configPath is the absolute path of the file that will be created by ConfigureRunner call.
-		if pr.configPath != "" {
-			return errors.New("Failed to create pure runner: config path already created")
+		if pr.logStreamer != nil {
+			return errors.New("Failed to create pure runner: logStreamer already created")
 		}
-		pr.configPath = configPath
+		pr.logStreamer = logStreamer
+		return nil
+	}
+}
+
+func PureRunnerWithConfigFunc(configFunc func(context.Context, *runner.ConfigMsg) (*runner.ConfigStatus, error)) PureRunnerOption {
+	return func(pr *pureRunner) error {
+		// configFunc is the handler for runner config passed to ConfigureRunner
+		if pr.configFunc != nil {
+			return errors.New("Failed to create pure runner: config func already set")
+		}
+		pr.configFunc = configFunc
+		return nil
+	}
+}
+
+func PureRunnerWithCustomHealthCheckerFunc(customHealthCheckerFunc func(context.Context) (map[string]string, error)) PureRunnerOption {
+	return func(pr *pureRunner) error {
+		// customHealthChecker can return any custom healthcheck status
+		if pr.customHealthCheckerFunc != nil {
+			return errors.New("Failed to create pure runner: custom healthchecker fun is alredy set")
+		}
+		pr.customHealthCheckerFunc = customHealthCheckerFunc
 		return nil
 	}
 }
@@ -1147,6 +1257,7 @@ func NewPureRunner(cancel context.CancelFunc, addr string, options ...PureRunner
 
 	pr.gRPCOptions = append(pr.gRPCOptions, grpc.StreamInterceptor(grpcutil.RIDStreamServerInterceptor))
 	pr.gRPCOptions = append(pr.gRPCOptions, grpc.UnaryInterceptor(grpcutil.RIDUnaryServerInterceptor))
+	pr.gRPCOptions = append(pr.gRPCOptions, grpc.StatsHandler(&ocgrpc.ServerHandler{}))
 
 	if pr.creds != nil {
 		pr.gRPCOptions = append(pr.gRPCOptions, grpc.Creds(pr.creds))

@@ -2,7 +2,6 @@ package runnerpool
 
 import (
 	"context"
-	"time"
 
 	"github.com/fnproject/fn/api/common"
 	"github.com/fnproject/fn/api/models"
@@ -43,7 +42,12 @@ func (tr *placerTracker) IsDone() bool {
 
 // HandleFindRunnersFailure is a convenience function to record error from runnerpool.Runners()
 func (tr *placerTracker) HandleFindRunnersFailure(err error) {
-	common.Logger(tr.requestCtx).WithError(err).Error("Failed to find runners for call")
+	logger := common.Logger(tr.requestCtx).WithError(err)
+	w, ok := err.(models.APIErrorWrapper)
+	if ok {
+		logger = logger.WithField("root_error", w.RootError())
+	}
+	logger.Error("Failed to find runners for call")
 	stats.Record(tr.requestCtx, errorPoolCountMeasure.M(0))
 }
 
@@ -117,12 +121,15 @@ func (tr *placerTracker) RetryAllBackoff(numOfRunners int) bool {
 		stats.Record(tr.requestCtx, emptyPoolCountMeasure.M(0))
 	}
 
+	t := common.NewTimer(tr.cfg.RetryAllDelay)
+	defer t.Stop()
+
 	select {
 	case <-tr.requestCtx.Done(): // client side timeout/cancel
 		return false
 	case <-tr.placerCtx.Done(): // placer wait timeout
 		return false
-	case <-time.After(tr.cfg.RetryAllDelay):
+	case <-t.C:
 	}
 
 	return true

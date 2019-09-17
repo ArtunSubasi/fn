@@ -48,6 +48,11 @@ message CallFinished {
     int64 schedulerDuration = 8;
     int64 executionDuration = 9;
     bool errorUser = 10;
+    string image = 11;
+    int64 imagePullWaitDuration = 12;
+    int64 ctrPrepDuration = 13;
+    int64 ctrCreateDuration = 14;
+    int64 initStartTime = 15;
 }
 
 message ClientMsg {
@@ -82,6 +87,11 @@ message RunnerStatus {
     int64 schedulerDuration = 15; // the amount of time for scheduler execution
     int64 executionDuration = 16; // the amount of time for function execution
     bool isNetworkDisabled = 17; // returns true if runner network is not ready
+    map<string,string> customStatus = 18; // returns any user defined healthcheck status
+    int64 imagePullWaitDuration = 19;
+    int64 ctrPrepDuration = 20;
+    int64 ctrCreateDuration = 21;
+    int64 initStartTime = 22;
 }
 
 message ConfigMsg {
@@ -89,6 +99,57 @@ message ConfigMsg {
 }
 
 message ConfigStatus {
+}
+
+// Collector to Runner messages
+message LogRequestMsg {
+    // Initial Logging session message sent by Collectors to Runners
+    message Start {
+        map<string,string> config = 1;
+    }
+
+    // Acknowledgement of last data in stream: a message sent by Collectors to Runners
+    message Ack {
+    }
+
+    // Enable stream readiness for push: a message sent by Collectors to Runners
+    message Ready {
+    }
+
+    oneof body {
+        Start start = 1;
+        Ack ack = 2;
+        Ready ready = 3;
+    }
+}
+
+// Runners to Collectors
+message LogResponseMsg {
+    // Per container log data
+    message Container {
+        string applicationId = 1;     // application id
+        string functionId = 2;        // function id
+        string containerId = 3;       // container id
+
+        // Per request log data
+        message Request {
+            string requestId = 1;     // call request id
+
+            // Log lines
+            message Line {
+                int64 timestamp = 1; // utc unix time msecs
+                enum Source {
+                    STDOUT = 0;
+                    STDERR = 1;
+                }
+                Source source = 2;    // stderr or stdout
+                bytes data = 3;       // opaque log data
+            }
+            repeated Line data = 2;   // log lines
+        }
+        repeated Request data = 4;    // request logs
+    }
+    repeated Container data = 1;      // container logs
 }
 
 service RunnerProtocol {
@@ -99,4 +160,7 @@ service RunnerProtocol {
 
     // Configure the remote runner by passing config data.
     rpc ConfigureRunner(ConfigMsg) returns (ConfigStatus);
+
+    // Logging Interface
+    rpc StreamLogs(stream LogRequestMsg) returns (stream LogResponseMsg);
 }

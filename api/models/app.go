@@ -31,7 +31,7 @@ var (
 	}
 	ErrAppsTooLongName = err{
 		code:  http.StatusBadRequest,
-		error: fmt.Errorf("App name must be %v characters or less", maxAppName),
+		error: fmt.Errorf("App name must be %v characters or less", MaxLengthAppName),
 	}
 	ErrAppsInvalidName = err{
 		code:  http.StatusBadRequest,
@@ -68,19 +68,11 @@ type App struct {
 
 func (a *App) Validate() error {
 
-	if a.Name == "" {
-		return ErrMissingName
+	if err := a.ValidateName(); err != nil {
+		return err
 	}
-	if len(a.Name) > maxAppName {
-		return ErrAppsTooLongName
-	}
-	for _, c := range a.Name {
-		if !(unicode.IsLetter(c) || unicode.IsNumber(c) || c == '_' || c == '-') {
-			return ErrAppsInvalidName
-		}
-	}
-	err := a.Annotations.Validate()
-	if err != nil {
+
+	if err := a.Annotations.Validate(); err != nil {
 		return err
 	}
 
@@ -98,6 +90,24 @@ func (a *App) Validate() error {
 			return ErrInvalidSyslog(fmt.Sprintf(`invalid syslog url: "%v" %v`, *a.SyslogURL, err))
 		}
 	}
+	return nil
+}
+
+func (a *App) ValidateName() error {
+	if a.Name == "" {
+		return ErrMissingName
+	}
+
+	if len(a.Name) > MaxLengthAppName {
+		return ErrAppsTooLongName
+	}
+
+	for _, c := range a.Name {
+		if !(unicode.IsLetter(c) || unicode.IsNumber(c) || c == '_' || c == '-') {
+			return ErrAppsInvalidName
+		}
+	}
+
 	return nil
 }
 

@@ -11,12 +11,22 @@ import (
 	"github.com/fnproject/fn/api/agent/drivers"
 	"github.com/fnproject/fn/api/common"
 	"github.com/fnproject/fn/api/models"
-	"github.com/fsouza/go-dockerclient"
+	docker "github.com/fsouza/go-dockerclient"
 	"github.com/sirupsen/logrus"
 	"go.opencensus.io/trace"
 )
 
-var ErrImageWithVolume = models.NewAPIError(http.StatusBadRequest, errors.New("image has Volume definition"))
+const (
+	FnUserId  = 1000
+	FnGroupId = 1000
+)
+
+var (
+	ErrImageWithVolume = models.NewAPIError(http.StatusBadRequest, errors.New("image has Volume definition"))
+	// FnDockerUser is used as the runtime user/group when running docker containers.
+	// This is not configurable at the moment, because some fdks require that user/group to be present in the container.
+	FnDockerUser = fmt.Sprintf("%v:%v", FnUserId, FnGroupId)
+)
 
 // A cookie identifies a unique request to run a task.
 type cookie struct {
@@ -98,6 +108,10 @@ func (c *cookie) configureMem(log logrus.FieldLogger) {
 	c.opts.Config.Memory = mem
 	c.opts.Config.MemorySwap = mem // disables swap
 	c.opts.Config.KernelMemory = mem
+	c.opts.HostConfig.MemorySwap = mem
+	c.opts.HostConfig.KernelMemory = mem
+	var zero int64
+	c.opts.HostConfig.MemorySwappiness = &zero // disables host swap
 }
 
 func (c *cookie) configureFsSize(log logrus.FieldLogger) {
@@ -113,6 +127,41 @@ func (c *cookie) configureFsSize(log logrus.FieldLogger) {
 	opt := fmt.Sprintf("%vM", c.task.FsSize())
 	log.WithFields(logrus.Fields{"size": opt, "call_id": c.task.Id()}).Debug("setting storage option")
 	c.opts.HostConfig.StorageOpt["size"] = opt
+}
+
+func (c *cookie) configurePIDs(log logrus.FieldLogger) {
+	pids := c.task.PIDs()
+	if pids == 0 {
+		return
+	}
+
+	pids64 := int64(pids)
+	log.WithFields(logrus.Fields{"pids": pids64, "call_id": c.task.Id()}).Debug("setting PIDs")
+	c.opts.HostConfig.PidsLimit = &pids64
+}
+
+func (c *cookie) configureULimits(log logrus.FieldLogger) {
+	c.configureULimit("nofile", c.task.OpenFiles(), log)
+	c.configureULimit("memlock", c.task.LockedMemory(), log)
+	c.configureULimit("sigpending", c.task.PendingSignals(), log)
+	c.configureULimit("msgqueue", c.task.MessageQueue(), log)
+}
+
+func (c *cookie) configureULimit(name string, value *uint64, log logrus.FieldLogger) {
+	if value == nil {
+		return
+	}
+
+	log = log.WithFields(logrus.Fields{"call_id": c.task.Id(), "ulimitName": name, "ulimitValue": *value})
+
+	value64 := int64(*value)
+	if value64 < 0 {
+		log.Warnf("ulimit value too big (ulimit ignored): %s", name)
+		return
+	}
+
+	log.Debugf("setting ulimit %s", name)
+	c.opts.HostConfig.Ulimits = append(c.opts.HostConfig.Ulimits, docker.ULimit{Name: name, Soft: value64, Hard: value64})
 }
 
 func (c *cookie) configureTmpFs(log logrus.FieldLogger) {
@@ -148,6 +197,7 @@ func (c *cookie) configureIOFS(log logrus.FieldLogger) {
 
 	bind := fmt.Sprintf("%s:%s", path, c.task.UDSDockerDest())
 	c.opts.HostConfig.Binds = append(c.opts.HostConfig.Binds, bind)
+	log.WithFields(logrus.Fields{"bind": bind, "call_id": c.task.Id()}).Debug("setting bind")
 }
 
 func (c *cookie) configureVolumes(log logrus.FieldLogger) {
@@ -264,6 +314,17 @@ func (c *cookie) configureEnv(log logrus.FieldLogger) {
 	for name, val := range c.task.EnvVars() {
 		c.opts.Config.Env = append(c.opts.Config.Env, name+"="+val)
 	}
+}
+
+func (c *cookie) configureSecurity(log logrus.FieldLogger) {
+	if c.drv.conf.DisableUnprivilegedContainers {
+		return
+	}
+	c.opts.Config.User = FnDockerUser
+	c.opts.HostConfig.CapDrop = []string{"all"}
+	c.opts.HostConfig.SecurityOpt = []string{"no-new-privileges"}
+	log.WithFields(logrus.Fields{"user": c.opts.Config.User,
+		"CapDrop": c.opts.HostConfig.CapDrop, "SecurityOpt": c.opts.HostConfig.SecurityOpt, "call_id": c.task.Id()}).Debug("setting security")
 }
 
 // implements Cookie

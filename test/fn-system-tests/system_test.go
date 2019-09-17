@@ -3,11 +3,14 @@ package tests
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 
 	"github.com/fnproject/fn/api/agent"
 	"github.com/fnproject/fn/api/agent/drivers"
+	rproto "github.com/fnproject/fn/api/agent/grpc"
 	"github.com/fnproject/fn/api/agent/hybrid"
 	"github.com/fnproject/fn/api/common"
 	"github.com/fnproject/fn/api/models"
@@ -18,7 +21,7 @@ import (
 
 	// We need docker client here, since we have a custom driver that wraps generic
 	// docker driver.
-	"github.com/fsouza/go-dockerclient"
+	docker "github.com/fsouza/go-dockerclient"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
@@ -45,7 +48,6 @@ const (
 
 	StatusImage       = "fnproject/fn-status-checker:latest"
 	StatusBarrierFile = "./barrier_file.txt"
-	ConfigFile        = "./config_file.txt"
 )
 
 var (
@@ -218,9 +220,7 @@ func CleanUpSystem(st *state) error {
 
 func SetUpAPINode(ctx context.Context) (*server.Server, error) {
 	curDir := pwd()
-	var defaultDB, defaultMQ string
-	defaultDB = fmt.Sprintf("sqlite3://%s/data/fn.db", curDir)
-	defaultMQ = fmt.Sprintf("bolt://%s/data/fn.mq", curDir)
+	defaultDB := fmt.Sprintf("sqlite3://%s/data/fn.db", curDir)
 	nodeType := server.ServerTypeAPI
 	opts := make([]server.Option, 0)
 	opts = append(opts, server.WithWebPort(APIPort))
@@ -229,9 +229,6 @@ func SetUpAPINode(ctx context.Context) (*server.Server, error) {
 	opts = append(opts, server.WithLogLevel(getEnv(server.EnvLogLevel, server.DefaultLogLevel)))
 	opts = append(opts, server.WithLogDest(getEnv(server.EnvLogDest, server.DefaultLogDest), "API"))
 	opts = append(opts, server.WithDBURL(getEnv(server.EnvDBURL, defaultDB)))
-	opts = append(opts, server.WithMQURL(getEnv(server.EnvMQURL, defaultMQ)))
-	opts = append(opts, server.WithLogURL(""))
-	opts = append(opts, server.WithLogstoreFromDatastore())
 	opts = append(opts, server.WithTriggerAnnotator(server.NewStaticURLTriggerAnnotator(LBAddress)))
 	opts = append(opts, server.WithFnAnnotator(server.NewStaticURLFnAnnotator(LBAddress)))
 	opts = append(opts, server.EnableShutdownEndpoint(ctx, func() {})) // TODO: do it properly
@@ -247,8 +244,6 @@ func SetUpLBNode(ctx context.Context) (*server.Server, error) {
 	opts = append(opts, server.WithLogLevel(getEnv(server.EnvLogLevel, server.DefaultLogLevel)))
 	opts = append(opts, server.WithLogDest(getEnv(server.EnvLogDest, server.DefaultLogDest), "LB"))
 	opts = append(opts, server.WithDBURL(""))
-	opts = append(opts, server.WithMQURL(""))
-	opts = append(opts, server.WithLogURL(""))
 	opts = append(opts, server.EnableShutdownEndpoint(ctx, func() {})) // TODO: do it properly
 	ridProvider := &server.RIDProvider{
 		HeaderName:   "fn_request_id",
@@ -274,13 +269,78 @@ func SetUpLBNode(ctx context.Context) (*server.Server, error) {
 
 	// Create an LB Agent with a Call Overrider to intercept calls in GetCall(). Overrider in this example
 	// scrubs CPU/TmpFsSize and adds FN_CHEESE key/value into extensions.
-	lbAgent, err := agent.NewLBAgent(cl, nodePool, placer, agent.WithLBCallOverrider(LBCallOverrider))
+	lbAgent, err := agent.NewLBAgent(nodePool, placer, agent.WithLBCallOverrider(LBCallOverrider))
 	if err != nil {
 		return nil, err
 	}
 
 	opts = append(opts, server.WithAgent(lbAgent), server.WithReadDataAccess(agent.NewCachedDataAccess(cl)))
 	return server.New(ctx, opts...), nil
+}
+
+type logStream struct {
+}
+
+func (l *logStream) StreamLogs(logStream rproto.RunnerProtocol_StreamLogsServer) error {
+
+	msg, err := logStream.Recv()
+	if err != nil {
+		return err
+	}
+	start := msg.GetStart()
+	if start == nil {
+		return errors.New("expected start session")
+	}
+
+	logrus.Infof("StreamLogs received start message %+v", start)
+
+	for {
+		msg, err := logStream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		ack := msg.GetAck()
+		if ack == nil {
+			return errors.New("expected ack")
+		}
+		logrus.Infof("StreamLogs received ACK message %+v", ack)
+
+		line := &rproto.LogResponseMsg_Container_Request_Line{
+			Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
+			Source:    rproto.LogResponseMsg_Container_Request_Line_STDOUT,
+		}
+
+		request := &rproto.LogResponseMsg_Container_Request{
+			RequestId: "101",
+			Data:      make([]*rproto.LogResponseMsg_Container_Request_Line, 0, 1),
+		}
+		request.Data = append(request.Data, line)
+
+		container := &rproto.LogResponseMsg_Container{
+			ApplicationId: "app1",
+			FunctionId:    "fun1",
+			ContainerId:   "container1",
+			Data:          make([]*rproto.LogResponseMsg_Container_Request, 0, 1),
+		}
+		container.Data = append(container.Data, request)
+
+		resp := &rproto.LogResponseMsg{
+			Data: make([]*rproto.LogResponseMsg_Container, 0, 1),
+		}
+		resp.Data = append(resp.Data, container)
+
+		logrus.Infof("StreamLogs sending Resp message %+v", resp)
+
+		err = logStream.Send(resp)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func SetUpPureRunnerNode(ctx context.Context, nodeNum int, StatusBarrierFile string) (*server.Server, error) {
@@ -293,14 +353,8 @@ func SetUpPureRunnerNode(ctx context.Context, nodeNum int, StatusBarrierFile str
 	opts = append(opts, server.WithLogLevel(getEnv(server.EnvLogLevel, server.DefaultLogLevel)))
 	opts = append(opts, server.WithLogDest(getEnv(server.EnvLogDest, server.DefaultLogDest), "PURE-RUNNER"))
 	opts = append(opts, server.WithDBURL(""))
-	opts = append(opts, server.WithMQURL(""))
-	opts = append(opts, server.WithLogURL(""))
 	opts = append(opts, server.EnableShutdownEndpoint(ctx, func() {})) // TODO: do it properly
 
-	ds, err := hybrid.NewNopDataStore()
-	if err != nil {
-		return nil, err
-	}
 	grpcAddr := fmt.Sprintf(":%d", RunnerStartGRPCPort+nodeNum)
 
 	// This is our Agent config, which we will use for both inner agent and docker.
@@ -321,7 +375,7 @@ func SetUpPureRunnerNode(ctx context.Context, nodeNum int, StatusBarrierFile str
 	}
 
 	// inner agent for pure-runners
-	innerAgent := agent.New(ds,
+	innerAgent := agent.New(
 		agent.WithConfig(cfg),
 		agent.WithDockerDriver(drv),
 		agent.WithCallOverrider(PureRunnerCallOverrider))
@@ -342,6 +396,8 @@ func SetUpPureRunnerNode(ctx context.Context, nodeNum int, StatusBarrierFile str
 		PermitWithoutStream: true,                           // allow client pings even if no active stream
 	}))
 
+	var streamer logStream
+
 	// now create pure-runner that wraps agent.
 	pureRunner, err := agent.NewPureRunner(cancel, grpcAddr,
 		agent.PureRunnerWithAgent(innerAgent),
@@ -349,7 +405,9 @@ func SetUpPureRunnerNode(ctx context.Context, nodeNum int, StatusBarrierFile str
 		agent.PureRunnerWithDetached(),
 		agent.PureRunnerWithGRPCServerOptions(grpcOpts...),
 		agent.PureRunnerWithStatusNetworkEnabler(StatusBarrierFile),
-		agent.PureRunnerWithConfigPath(ConfigFile),
+		agent.PureRunnerWithConfigFunc(configureRunner),
+		agent.PureRunnerWithCustomHealthCheckerFunc(customHealthChecker),
+		agent.PureRunnerWithLogStreamer(&streamer),
 	)
 	if err != nil {
 		return nil, err
@@ -480,6 +538,11 @@ func (d *customDriver) SetPullImageRetryPolicy(policy common.BackOffConfig, chec
 }
 
 // implements Driver
+func (d *customDriver) GetSlotKeyExtensions(extn map[string]string) string {
+	return ""
+}
+
+// implements Driver
 func (d *customDriver) Close() error {
 	return d.drv.Close()
 }
@@ -495,4 +558,25 @@ func setLogBuffer() *bytes.Buffer {
 	gin.DefaultWriter = &buf
 	log.SetOutput(&buf)
 	return &buf
+}
+
+var configureRunnerSetsThis map[string]string
+
+func configureRunner(ctx context.Context, config *rproto.ConfigMsg) (*rproto.ConfigStatus, error) {
+	if config.Config != nil {
+		configureRunnerSetsThis = config.Config
+	}
+	return &rproto.ConfigStatus{}, nil
+}
+
+var shouldCustomHealthCheckerFail = false
+
+func customHealthChecker(ctx context.Context) (map[string]string, error) {
+	if !shouldCustomHealthCheckerFail {
+		return map[string]string{
+			"custom": "works",
+		}, nil
+	}
+
+	return nil, models.NewAPIError(450, errors.New("Custom healthcheck failed"))
 }

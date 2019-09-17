@@ -10,11 +10,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fnproject/fn/api/agent/drivers/stats"
+	docker "github.com/fsouza/go-dockerclient"
+
 	"github.com/coreos/go-semver/semver"
 	"github.com/fnproject/fn/api/agent/drivers"
 	"github.com/fnproject/fn/api/common"
 	"github.com/fnproject/fn/api/models"
-	"github.com/fsouza/go-dockerclient"
 	"github.com/sirupsen/logrus"
 	"go.opencensus.io/trace"
 	"golang.org/x/time/rate"
@@ -296,13 +298,13 @@ func runImageCleaner(ctx context.Context, driver *DockerDriver) {
 
 		img := driver.imgCache.Pop()
 		if img != nil {
-			log.WithField("image", img).Info("Removing image")
+			log.WithField("removedImage", img).Info("Removing image")
 
 			ctx, cancel := context.WithTimeout(ctx, removeImgTimeout)
 			err := driver.docker.RemoveImage(img.ID, docker.RemoveImageOptions{Context: ctx})
 			cancel()
 			if err != nil && err != docker.ErrNoSuchImage {
-				log.WithError(err).WithField("image", img).Error("Removing image failed")
+				log.WithError(err).WithField("removedImage", img).Error("Removing image failed")
 				// in-use or can't be removed or docker just timed out, try to add it back to the cache
 				driver.imgCache.Update(img)
 			}
@@ -386,6 +388,7 @@ func (drv *DockerDriver) CreateCookie(ctx context.Context, task drivers.Containe
 			ReadonlyRootfs: drv.conf.EnableReadOnlyRootFs,
 			Init:           true,
 		},
+		NetworkingConfig: &docker.NetworkingConfig{},
 	}
 
 	cookie := &cookie{
@@ -402,6 +405,8 @@ func (drv *DockerDriver) CreateCookie(ctx context.Context, task drivers.Containe
 	cookie.configureEnv(log)
 	cookie.configureCPU(log)
 	cookie.configureFsSize(log)
+	cookie.configurePIDs(log)
+	cookie.configureULimits(log)
 	cookie.configureTmpFs(log)
 	cookie.configureVolumes(log)
 	cookie.configureWorkDir(log)
@@ -409,8 +414,13 @@ func (drv *DockerDriver) CreateCookie(ctx context.Context, task drivers.Containe
 	cookie.configureNetwork(log)
 	cookie.configureHostname(log)
 	cookie.configureImage(log)
+	cookie.configureSecurity(log)
 
 	return cookie, nil
+}
+
+func (drv *DockerDriver) GetSlotKeyExtensions(extn map[string]string) string {
+	return ""
 }
 
 // Run executes the docker container. If task runs, drivers.RunResult will be returned. If something fails outside the task (ie: Docker), it will return error.
@@ -476,8 +486,7 @@ func (drv *DockerDriver) run(ctx context.Context, container string, task drivers
 	if err != nil && ctx.Err() == nil {
 		if isSyslogError(err) {
 			// syslog error is a func error
-			e := models.NewAPIError(http.StatusInternalServerError, errors.New("Syslog Unavailable"))
-			return nil, models.NewFuncError(e)
+			return nil, models.ErrSyslogUnavailable
 		}
 		// if there's just a timeout making the docker calls, drv.wait below will rewrite it to timeout
 		log.WithError(err).WithFields(logrus.Fields{"container": container, "call_id": task.Id()}).Error("error starting container")
@@ -568,7 +577,7 @@ func (drv *DockerDriver) collectStats(ctx context.Context, stopSignal <-chan str
 	}
 }
 
-func cherryPick(ds *docker.Stats) drivers.Stat {
+func cherryPick(ds *docker.Stats) stats.Stat {
 	// TODO cpu % is as a % of the whole system... cpu is weird since we're sharing it
 	// across a bunch of containers and it scales based on how many we're sharing with,
 	// do we want users to see as a % of system?
@@ -598,7 +607,7 @@ func cherryPick(ds *docker.Stats) drivers.Stat {
 		}
 	}
 
-	return drivers.Stat{
+	return stats.Stat{
 		Timestamp: common.DateTime(ds.Read),
 		Metrics: map[string]uint64{
 			// source: https://godoc.org/github.com/fsouza/go-dockerclient#Stats

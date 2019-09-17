@@ -1,10 +1,10 @@
 # Just builds
 .PHONY: mod
-dep:
+mod:
 	GO111MODULE=on GOFLAGS=-mod=vendor go mod vendor -v
 
 .PHONY: mod-up
-dep-up:
+mod-up:
 	go get -u
 
 .PHONY: build
@@ -54,11 +54,11 @@ fn-test-volume:
 	cd images/fn-test-volume && ./build.sh
 
 .PHONY: test-middleware
-test-middleware: test-basic
+test-middleware:
 	cd examples/middleware && go build
 
 .PHONY: test-extensions
-test-extensions: test-basic
+test-extensions:
 	cd examples/extensions && go build
 
 .PHONY: test-basic
@@ -86,20 +86,12 @@ img-mysql:
 img-postgres:
 	/bin/bash -c "source ./helpers.sh && docker_pull_postgres"
 
-.PHONY: img-minio
-img-minio:
-	/bin/bash -c "source ./helpers.sh && docker_pull_minio"
-
 .PHONY: pull-images
-pull-images: img-mysql img-postgres img-minio img-busybox
+pull-images: img-mysql img-postgres img-busybox
 
 .PHONY: test-datastore
 test-datastore:
 	cd api/datastore && go test  ./...
-
-.PHONY: test-log-datastore
-test-log-datastore:
-	cd api/logs && go test  ./...
 
 .PHONY: test-build-arm
 test-build-arm:

@@ -2,21 +2,18 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"reflect"
 	"strings"
 	"testing"
 
-	"context"
-	"os"
-
 	"github.com/fnproject/fn/api/agent"
 	"github.com/fnproject/fn/api/datastore"
-	"github.com/fnproject/fn/api/logs"
 	"github.com/fnproject/fn/api/models"
-	"github.com/fnproject/fn/api/mqs"
-	"reflect"
 )
 
 func envTweaker(name, value string) func() {
@@ -41,50 +38,12 @@ func envTweaker(name, value string) func() {
 }
 
 func testRunner(_ *testing.T, args ...interface{}) (agent.Agent, context.CancelFunc) {
-	ls := logs.NewMock()
-	var mq models.MessageQueue = &mqs.Mock{}
-	for _, a := range args {
-		switch arg := a.(type) {
-		case models.MessageQueue:
-			mq = arg
-		case models.LogStore:
-			ls = arg
-		}
-	}
-	r := agent.New(agent.NewDirectCallDataAccess(ls, mq))
+	r := agent.New()
 	return r, func() { r.Close() }
 }
 
-func checkLogs(t *testing.T, tnum int, ds models.LogStore, callID string, expected []string) bool {
-
-	logReader, err := ds.GetLog(context.Background(), "fnid_not_needed_by_mock", callID)
-	if err != nil {
-		t.Errorf("Test %d: GetLog for call_id:'%s' returned err %s",
-			tnum, callID, err.Error())
-		return false
-	}
-
-	logBytes, err := ioutil.ReadAll(logReader)
-	if err != nil {
-		t.Errorf("Test %d: GetLog read IO call_id:'%s' returned err %s",
-			tnum, callID, err.Error())
-		return false
-	}
-
-	logBody := string(logBytes)
-	maxLog := len(logBody)
-	if maxLog > 1024 {
-		maxLog = 1024
-	}
-
-	for _, match := range expected {
-		if !strings.Contains(logBody, match) {
-			t.Errorf("Test %d: GetLog read IO call_id:%s cannot find: %s in logs: %s",
-				tnum, callID, match, logBody[:maxLog])
-			return false
-		}
-	}
-
+func checkLogs(t *testing.T, tnum int, callID string, expected []string) bool {
+	// TODO(reed): test these after adding an extension to get these things, but not the old way
 	return true
 }
 
@@ -97,8 +56,7 @@ func TestTriggerRunnerGet(t *testing.T) {
 
 	rnr, cancel := testRunner(t, ds)
 	defer cancel()
-	logDB := logs.NewMock()
-	srv := testServer(ds, &mqs.Mock{}, logDB, rnr, ServerTypeFull)
+	srv := testServer(ds, rnr, ServerTypeFull)
 
 	for i, test := range []struct {
 		path          string
@@ -140,8 +98,7 @@ func TestTriggerRunnerPost(t *testing.T) {
 	rnr, cancel := testRunner(t, ds)
 	defer cancel()
 
-	fnl := logs.NewMock()
-	srv := testServer(ds, &mqs.Mock{}, fnl, rnr, ServerTypeFull)
+	srv := testServer(ds, rnr, ServerTypeFull)
 
 	for i, test := range []struct {
 		path          string
@@ -197,12 +154,11 @@ func TestTriggerRunnerExecEmptyBody(t *testing.T) {
 			{ID: "t2", Name: "t2", AppID: app.ID, FnID: f1.ID, Type: "http", Source: "/hot"},
 		},
 	)
-	ls := logs.NewMock()
 
-	rnr, cancelrnr := testRunner(t, ds, ls)
+	rnr, cancelrnr := testRunner(t, ds)
 	defer cancelrnr()
 
-	srv := testServer(ds, &mqs.Mock{}, ls, rnr, ServerTypeFull)
+	srv := testServer(ds, rnr, ServerTypeFull)
 
 	emptyBody := `{"echoContent": "_TRX_ID_", "isDebug": true, "isEmptyBody": true}`
 
@@ -242,8 +198,10 @@ func TestTriggerRunnerExecEmptyBody(t *testing.T) {
 func TestTriggerRunnerExecution(t *testing.T) {
 	buf := setLogBuffer()
 	isFailure := false
-	tweaker := envTweaker("FN_MAX_RESPONSE_SIZE", "2048")
-	defer tweaker()
+	tweaker1 := envTweaker("FN_MAX_RESPONSE_SIZE", "2048")
+	tweaker2 := envTweaker("FN_MAX_HDR_RESPONSE_SIZE", "1024")
+	defer tweaker1()
+	defer tweaker2()
 
 	// Log once after we are done, flow of events are important (hot/cold containers, idle timeout, etc.)
 	// for figuring out why things failed.
@@ -273,12 +231,11 @@ func TestTriggerRunnerExecution(t *testing.T) {
 			{ID: "13", Name: "13", Source: "/httpstream", Type: "http", AppID: app.ID, FnID: httpStreamFn.ID},
 		},
 	)
-	ls := logs.NewMock()
 
-	rnr, cancelrnr := testRunner(t, ds, ls)
+	rnr, cancelrnr := testRunner(t, ds)
 	defer cancelrnr()
 
-	srv := testServer(ds, &mqs.Mock{}, ls, rnr, ServerTypeFull)
+	srv := testServer(ds, rnr, ServerTypeFull)
 
 	expHeaders := map[string][]string{"Content-Type": {"application/json; charset=utf-8"}}
 	expCTHeaders := map[string][]string{"Content-Type": {"foo/bar"}}
@@ -294,7 +251,10 @@ func TestTriggerRunnerExecution(t *testing.T) {
 
 	// sleep between logs and with debug enabled, fn-test-utils will log header/footer below:
 	multiLog := `{"echoContent": "_TRX_ID_", "sleepTime": 1000, "isDebug": true}`
-	bigoutput := `{"echoContent": "_TRX_ID_", "isDebug": true, "trailerRepeat": 1000}`                                                          // 1000 trailers to exceed 2K
+	bigoutput := `{"echoContent": "_TRX_ID_", "isDebug": true, "trailerRepeat": 1000}` // 1000 trailers to exceed 2K
+
+	bighdroutput := `{"echoContent": "_TRX_ID_", "isDebug": true, "returnHeaders": {"zoo": ["` + strings.Repeat("a", 1024) + `"]}}` // big header to exceed
+
 	smalloutput := `{"echoContent": "_TRX_ID_", "isDebug": true, "trailerRepeat": 1, "responseContentType": "application/json; charset=utf-8"}` // 1 trailer < 2K
 
 	statusChecker := `{"echoContent": "_TRX_ID_", "isDebug": true, "responseCode":202, "responseContentType": "application/json; charset=utf-8"}`
@@ -302,11 +262,13 @@ func TestTriggerRunnerExecution(t *testing.T) {
 	// these tests are such a pita it's easier to comment most of them out. instead of fixing it i'm doing this fuck me yea
 	_, _, _, _, _, _, _, _, _, _, _ = expHeaders, expCTHeaders, multiLogExpectHot, crasher, oomer, ok, respTypeLie, multiLog, bigoutput, smalloutput, statusChecker
 
-	fooHeader := map[string][]string{"Content-Type": {"application/hateson"}, "Test-Header": {"foo"}}
+	// Keep-Alive should get stripped, Content-Type should not get framed, Test-Header should get framed
+	fooHeader := map[string][]string{"Content-Type": {"application/hateson"}, "Test-Header": {"foo"}, "Keep-Alive": {"true"}}
 	expFooHeaders := map[string][]string{"Content-Type": {"application/hateson"}, "Return-Header": {"foo", "bar"}}
 	expFooHeadersBody := `{"echoContent": "_TRX_ID_",
 		"expectHeaders": {
 			"Content-Type":["application/hateson"],
+			"Keep-Alive":[""],
 			"Test-Header":["foo"]
 		},
 		"returnHeaders": {
@@ -331,12 +293,13 @@ func TestTriggerRunnerExecution(t *testing.T) {
 		{"/t/myapp/httpstream", fooHeader, expFooHeadersBody, "POST", http.StatusOK, expFooHeaders, "", nil},
 		// NOTE: we can't test bad response framing anymore easily (eg invalid http response), should we even worry about it?
 		{"/t/myapp/httpstream", nil, respTypeLie, "POST", http.StatusOK, expCTHeaders, "", nil},
-		{"/t/myapp/httpstream", nil, crasher, "POST", http.StatusBadGateway, expHeaders, "error receiving function response", nil},
+		{"/t/myapp/httpstream", nil, crasher, "POST", http.StatusBadGateway, expHeaders, models.ErrFunctionResponse.Error(), nil},
 		// XXX(reed): we could stop buffering function responses so that we can stream things?
-		{"/t/myapp/httpstream", nil, bigoutput, "POST", http.StatusBadGateway, nil, "function response too large", nil},
+		{"/t/myapp/httpstream", nil, bigoutput, "POST", http.StatusBadGateway, nil, models.ErrFunctionResponseTooBig.Error(), nil},
+		{"/t/myapp/httpstream", nil, bighdroutput, "POST", http.StatusBadGateway, nil, models.ErrFunctionResponseHdrTooBig.Error(), nil},
 		{"/t/myapp/httpstream", nil, smalloutput, "POST", http.StatusOK, expHeaders, "", nil},
 		// XXX(reed): meh we really should try to get oom out, but maybe it's better left to the logs?
-		{"/t/myapp/httpstream", nil, oomer, "POST", http.StatusBadGateway, nil, "error receiving function response", nil},
+		{"/t/myapp/httpstream", nil, oomer, "POST", http.StatusBadGateway, nil, models.ErrFunctionResponse.Error(), nil},
 
 		{"/t/myapp/mydne", nil, ``, "GET", http.StatusNotFound, nil, "pull access denied", nil},
 		{"/t/myapp/mydneregistry", nil, ``, "GET", http.StatusBadGateway, nil, "connection refused", nil},
@@ -400,7 +363,7 @@ func TestTriggerRunnerExecution(t *testing.T) {
 
 	for i, test := range testCases {
 		if test.expectedLogsSubStr != nil {
-			if !checkLogs(t, i, ls, callIds[i], test.expectedLogsSubStr) {
+			if !checkLogs(t, i, callIds[i], test.expectedLogsSubStr) {
 				isFailure = true
 			}
 		}
@@ -435,11 +398,10 @@ func TestTriggerRunnerTimeout(t *testing.T) {
 		},
 	)
 
-	fnl := logs.NewMock()
-	rnr, cancelrnr := testRunner(t, ds, fnl)
+	rnr, cancelrnr := testRunner(t, ds)
 	defer cancelrnr()
 
-	srv := testServer(ds, &mqs.Mock{}, fnl, rnr, ServerTypeFull)
+	srv := testServer(ds, rnr, ServerTypeFull)
 
 	for i, test := range []struct {
 		path            string
@@ -501,11 +463,10 @@ func TestTriggerRunnerMinimalConcurrentHotSync(t *testing.T) {
 		[]*models.Trigger{{Name: "1", Source: "/hot", AppID: app.ID, FnID: fn.ID, Type: "http"}},
 	)
 
-	fnl := logs.NewMock()
-	rnr, cancelrnr := testRunner(t, ds, fnl)
+	rnr, cancelrnr := testRunner(t, ds)
 	defer cancelrnr()
 
-	srv := testServer(ds, &mqs.Mock{}, fnl, rnr, ServerTypeFull)
+	srv := testServer(ds, rnr, ServerTypeFull)
 
 	for i, test := range []struct {
 		path            string

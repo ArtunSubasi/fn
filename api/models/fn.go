@@ -44,7 +44,7 @@ var (
 	}
 	ErrFnsTooLongName = err{
 		code:  http.StatusBadRequest,
-		error: fmt.Errorf("Fn name must be %v characters or less", maxFnName),
+		error: fmt.Errorf("Fn name must be %v characters or less", MaxLengthFnName),
 	}
 	ErrFnsMissingAppID = err{
 		code:  http.StatusBadRequest,
@@ -146,15 +146,8 @@ func (f *Fn) SetDefaults() {
 // Validate validates all field values, returning the first error, if any.
 func (f *Fn) Validate() error {
 
-	if f.Name == "" {
-		return ErrFnsMissingName
-	}
-	if len(f.Name) > maxFnName {
-		return ErrFnsTooLongName
-	}
-
-	if url.PathEscape(f.Name) != f.Name {
-		return ErrFnsInvalidName
+	if err := f.ValidateName(); err != nil {
+		return err
 	}
 
 	if f.AppID == "" {
@@ -178,6 +171,22 @@ func (f *Fn) Validate() error {
 	}
 
 	return f.Annotations.Validate()
+}
+
+func (f *Fn) ValidateName() error {
+	if f.Name == "" {
+		return ErrFnsMissingName
+	}
+
+	if len(f.Name) > MaxLengthFnName {
+		return ErrFnsTooLongName
+	}
+
+	if url.PathEscape(f.Name) != f.Name {
+		return ErrFnsInvalidName
+	}
+
+	return nil
 }
 
 func (f *Fn) Clone() *Fn {

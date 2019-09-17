@@ -11,38 +11,44 @@ import (
 
 // Config specifies various settings for an agent
 type Config struct {
-	MinDockerVersion        string        `json:"min_docker_version"`
-	ContainerLabelTag       string        `json:"container_label_tag"`
-	DockerNetworks          string        `json:"docker_networks"`
-	DockerLoadFile          string        `json:"docker_load_file"`
-	FreezeIdle              time.Duration `json:"freeze_idle_msecs"`
-	HotPoll                 time.Duration `json:"hot_poll_msecs"`
-	HotLauncherTimeout      time.Duration `json:"hot_launcher_timeout_msecs"`
-	HotPullTimeout          time.Duration `json:"hot_pull_timeout_msecs"`
-	HotStartTimeout         time.Duration `json:"hot_start_timeout_msecs"`
-	AsyncChewPoll           time.Duration `json:"async_chew_poll_msecs"`
-	DetachedHeadRoom        time.Duration `json:"detached_head_room_msecs"`
-	MaxResponseSize         uint64        `json:"max_response_size_bytes"`
-	MaxLogSize              uint64        `json:"max_log_size_bytes"`
-	MaxTotalCPU             uint64        `json:"max_total_cpu_mcpus"`
-	MaxTotalMemory          uint64        `json:"max_total_memory_bytes"`
-	MaxFsSize               uint64        `json:"max_fs_size_mb"`
-	PreForkPoolSize         uint64        `json:"pre_fork_pool_size"`
-	PreForkImage            string        `json:"pre_fork_image"`
-	PreForkCmd              string        `json:"pre_fork_pool_cmd"`
-	PreForkUseOnce          uint64        `json:"pre_fork_use_once"`
-	PreForkNetworks         string        `json:"pre_fork_networks"`
-	EnableNBResourceTracker bool          `json:"enable_nb_resource_tracker"`
-	MaxTmpFsInodes          uint64        `json:"max_tmpfs_inodes"`
-	DisableReadOnlyRootFs   bool          `json:"disable_readonly_rootfs"`
-	DisableDebugUserLogs    bool          `json:"disable_debug_user_logs"`
-	IOFSEnableTmpfs         bool          `json:"iofs_enable_tmpfs"`
-	IOFSAgentPath           string        `json:"iofs_path"`
-	IOFSMountRoot           string        `json:"iofs_mount_root"`
-	IOFSOpts                string        `json:"iofs_opts"`
-	ImageCleanMaxSize       uint64        `json:"image_clean_max_size"`
-	ImageCleanExemptTags    string        `json:"image_clean_exempt_tags"`
-	ImageEnableVolume       bool          `json:"image_enable_volume"`
+	MinDockerVersion              string        `json:"min_docker_version"`
+	ContainerLabelTag             string        `json:"container_label_tag"`
+	DockerNetworks                string        `json:"docker_networks"`
+	DockerLoadFile                string        `json:"docker_load_file"`
+	DisableUnprivilegedContainers bool          `json:"disable_unprivileged_containers"`
+	FreezeIdle                    time.Duration `json:"freeze_idle_msecs"`
+	HotPoll                       time.Duration `json:"hot_poll_msecs"`
+	HotLauncherTimeout            time.Duration `json:"hot_launcher_timeout_msecs"`
+	HotPullTimeout                time.Duration `json:"hot_pull_timeout_msecs"`
+	HotStartTimeout               time.Duration `json:"hot_start_timeout_msecs"`
+	DetachedHeadRoom              time.Duration `json:"detached_head_room_msecs"`
+	MaxResponseSize               uint64        `json:"max_response_size_bytes"`
+	MaxHdrResponseSize            uint64        `json:"max_hdr_response_size_bytes"`
+	MaxLogSize                    uint64        `json:"max_log_size_bytes"`
+	MaxTotalCPU                   uint64        `json:"max_total_cpu_mcpus"`
+	MaxTotalMemory                uint64        `json:"max_total_memory_bytes"`
+	MaxFsSize                     uint64        `json:"max_fs_size_mb"`
+	MaxPIDs                       uint64        `json:"max_pids"`
+	MaxOpenFiles                  *uint64       `json:"max_open_files"`
+	MaxLockedMemory               *uint64       `json:"max_locked_memory"`
+	MaxPendingSignals             *uint64       `json:"max_pending_signals"`
+	MaxMessageQueue               *uint64       `json:"max_message_queue"`
+	PreForkPoolSize               uint64        `json:"pre_fork_pool_size"`
+	PreForkImage                  string        `json:"pre_fork_image"`
+	PreForkCmd                    string        `json:"pre_fork_pool_cmd"`
+	PreForkUseOnce                uint64        `json:"pre_fork_use_once"`
+	PreForkNetworks               string        `json:"pre_fork_networks"`
+	EnableNBResourceTracker       bool          `json:"enable_nb_resource_tracker"`
+	MaxTmpFsInodes                uint64        `json:"max_tmpfs_inodes"`
+	DisableReadOnlyRootFs         bool          `json:"disable_readonly_rootfs"`
+	DisableDebugUserLogs          bool          `json:"disable_debug_user_logs"`
+	IOFSEnableTmpfs               bool          `json:"iofs_enable_tmpfs"`
+	IOFSAgentPath                 string        `json:"iofs_path"`
+	IOFSMountRoot                 string        `json:"iofs_mount_root"`
+	IOFSOpts                      string        `json:"iofs_opts"`
+	ImageCleanMaxSize             uint64        `json:"image_clean_max_size"`
+	ImageCleanExemptTags          string        `json:"image_clean_exempt_tags"`
+	ImageEnableVolume             bool          `json:"image_enable_volume"`
 }
 
 const (
@@ -58,6 +64,8 @@ const (
 	EnvDockerNetworks = "FN_DOCKER_NETWORKS"
 	// EnvDockerLoadFile is a file location for a file that contains a tarball of a docker image to load on startup
 	EnvDockerLoadFile = "FN_DOCKER_LOAD_FILE"
+	// EnvDisableUnprivilegedContainers disables docker security features like user name, cap drop etc.
+	EnvDisableUnprivilegedContainers = "FN_DISABLE_UNPRIVILEGED_CONTAINERS"
 	// EnvFreezeIdle is the delay between a container being last used and being frozen
 	EnvFreezeIdle = "FN_FREEZE_IDLE_MSECS"
 	// EnvHotPoll is the interval to ping for a slot manager thread to check if a container should be
@@ -69,10 +77,10 @@ const (
 	EnvHotPullTimeout = "FN_HOT_PULL_TIMEOUT_MSECS"
 	// EnvHotStartTimeout is the timeout for a hot container to become available for use for requests after EnvHotStartTimeout
 	EnvHotStartTimeout = "FN_HOT_START_TIMEOUT_MSECS"
-	// EnvAsyncChewPoll is the interval to poll the queue that contains async function invocations
-	EnvAsyncChewPoll = "FN_ASYNC_CHEW_POLL_MSECS"
 	// EnvMaxResponseSize is the maximum number of bytes that a function may return from an invocation
 	EnvMaxResponseSize = "FN_MAX_RESPONSE_SIZE"
+	// EnvHdrMaxResponseSize is the maximum number of bytes that a function may return in an invocation header
+	EnvMaxHdrResponseSize = "FN_MAX_HDR_RESPONSE_SIZE"
 	// EnvMaxLogSize is the maximum size that a function's log may reach
 	EnvMaxLogSize = "FN_MAX_LOG_SIZE_BYTES"
 	// EnvMaxTotalCPU is the maximum CPU that will be reserved across all containers
@@ -81,6 +89,19 @@ const (
 	EnvMaxTotalMemory = "FN_MAX_TOTAL_MEMORY_BYTES"
 	// EnvMaxFsSize is the maximum filesystem size that a function may use
 	EnvMaxFsSize = "FN_MAX_FS_SIZE_MB"
+	// EnvMaxPIDs is the maximum number of PIDs that a function is allowed to create
+	EnvMaxPIDs = "FN_MAX_PIDS"
+	// EnvMaxOpenFiles is the maximum number open files handles the process in a
+	// function is allowed to have
+	EnvMaxOpenFiles = "FN_MAX_OPEN_FILES"
+	// EnvMaxLockedMemory the maximum number of bytes of memory that may be
+	// locked into RAM
+	EnvMaxLockedMemory = "FN_MAX_LOCKED_MEMORY"
+	// EnvMaxPendingSignals limit on the number of signals that may be queued
+	EnvMaxPendingSignals = "FN_MAX_PENDING_SIGNALS"
+	// EnvMaxMessageQueue limit on the number of bytes that can be allocated for
+	// POSIX message queues
+	EnvMaxMessageQueue = "FN_MAX_MESSAGE_QUEUE"
 	// EnvPreForkPoolSize is the number of containers pooled to steal network from, this may reduce latency
 	EnvPreForkPoolSize = "FN_EXPERIMENTAL_PREFORK_POOL_SIZE"
 	// EnvPreForkImage is the image to use for the pre-fork pool
@@ -132,7 +153,6 @@ const (
 
 // NewConfig returns a config set from env vars, plus defaults
 func NewConfig() (*Config, error) {
-
 	cfg := &Config{
 		MinDockerVersion: "17.10.0-ce",
 		MaxLogSize:       1 * 1024 * 1024,
@@ -140,29 +160,40 @@ func NewConfig() (*Config, error) {
 		PreForkCmd:       "tail -f /dev/null",
 	}
 
-	var err error
+	defaultMaxPIDs := uint64(50)
+	defaultMaxOpenFiles := uint64(350)
+	defaultMaxLockedMemory := uint64(64 * 1024)
+	defaultMaxPendingSignals := uint64(5000)
+	defaultMaxMessageQueue := uint64(819200)
 
+	var err error
 	err = setEnvMsecs(err, EnvFreezeIdle, &cfg.FreezeIdle, 50*time.Millisecond)
 	err = setEnvMsecs(err, EnvHotPoll, &cfg.HotPoll, DefaultHotPoll)
 	err = setEnvMsecs(err, EnvHotLauncherTimeout, &cfg.HotLauncherTimeout, time.Duration(60)*time.Minute)
 	err = setEnvMsecs(err, EnvHotPullTimeout, &cfg.HotPullTimeout, time.Duration(10)*time.Minute)
 	err = setEnvMsecs(err, EnvHotStartTimeout, &cfg.HotStartTimeout, time.Duration(5)*time.Second)
-	err = setEnvMsecs(err, EnvAsyncChewPoll, &cfg.AsyncChewPoll, time.Duration(60)*time.Second)
 	err = setEnvMsecs(err, EnvDetachedHeadroom, &cfg.DetachedHeadRoom, time.Duration(360)*time.Second)
-	err = setEnvUint(err, EnvMaxResponseSize, &cfg.MaxResponseSize)
-	err = setEnvUint(err, EnvMaxLogSize, &cfg.MaxLogSize)
-	err = setEnvUint(err, EnvMaxTotalCPU, &cfg.MaxTotalCPU)
-	err = setEnvUint(err, EnvMaxTotalMemory, &cfg.MaxTotalMemory)
-	err = setEnvUint(err, EnvMaxFsSize, &cfg.MaxFsSize)
-	err = setEnvUint(err, EnvPreForkPoolSize, &cfg.PreForkPoolSize)
+	err = setEnvUint(err, EnvMaxResponseSize, &cfg.MaxResponseSize, nil)
+	err = setEnvUint(err, EnvMaxHdrResponseSize, &cfg.MaxHdrResponseSize, nil)
+	err = setEnvUint(err, EnvMaxLogSize, &cfg.MaxLogSize, nil)
+	err = setEnvUint(err, EnvMaxTotalCPU, &cfg.MaxTotalCPU, nil)
+	err = setEnvUint(err, EnvMaxTotalMemory, &cfg.MaxTotalMemory, nil)
+	err = setEnvUint(err, EnvMaxFsSize, &cfg.MaxFsSize, nil)
+	err = setEnvUint(err, EnvMaxPIDs, &cfg.MaxPIDs, &defaultMaxPIDs)
+	err = setEnvUintPointer(err, EnvMaxOpenFiles, &cfg.MaxOpenFiles, &defaultMaxOpenFiles)
+	err = setEnvUintPointer(err, EnvMaxLockedMemory, &cfg.MaxLockedMemory, &defaultMaxLockedMemory)
+	err = setEnvUintPointer(err, EnvMaxPendingSignals, &cfg.MaxPendingSignals, &defaultMaxPendingSignals)
+	err = setEnvUintPointer(err, EnvMaxMessageQueue, &cfg.MaxMessageQueue, &defaultMaxMessageQueue)
+	err = setEnvUint(err, EnvPreForkPoolSize, &cfg.PreForkPoolSize, nil)
 	err = setEnvStr(err, EnvPreForkImage, &cfg.PreForkImage)
 	err = setEnvStr(err, EnvPreForkCmd, &cfg.PreForkCmd)
-	err = setEnvUint(err, EnvPreForkUseOnce, &cfg.PreForkUseOnce)
+	err = setEnvUint(err, EnvPreForkUseOnce, &cfg.PreForkUseOnce, nil)
 	err = setEnvStr(err, EnvPreForkNetworks, &cfg.PreForkNetworks)
 	err = setEnvStr(err, EnvContainerLabelTag, &cfg.ContainerLabelTag)
 	err = setEnvStr(err, EnvDockerNetworks, &cfg.DockerNetworks)
 	err = setEnvStr(err, EnvDockerLoadFile, &cfg.DockerLoadFile)
-	err = setEnvUint(err, EnvMaxTmpFsInodes, &cfg.MaxTmpFsInodes)
+	err = setEnvBool(err, EnvDisableUnprivilegedContainers, &cfg.DisableUnprivilegedContainers)
+	err = setEnvUint(err, EnvMaxTmpFsInodes, &cfg.MaxTmpFsInodes, nil)
 	err = setEnvStr(err, EnvIOFSPath, &cfg.IOFSAgentPath)
 	err = setEnvStr(err, EnvIOFSDockerPath, &cfg.IOFSMountRoot)
 	err = setEnvStr(err, EnvIOFSOpts, &cfg.IOFSOpts)
@@ -170,9 +201,10 @@ func NewConfig() (*Config, error) {
 	err = setEnvBool(err, EnvEnableNBResourceTracker, &cfg.EnableNBResourceTracker)
 	err = setEnvBool(err, EnvDisableReadOnlyRootFs, &cfg.DisableReadOnlyRootFs)
 	err = setEnvBool(err, EnvDisableDebugUserLogs, &cfg.DisableDebugUserLogs)
-	err = setEnvUint(err, EnvImageCleanMaxSize, &cfg.ImageCleanMaxSize)
+	err = setEnvUint(err, EnvImageCleanMaxSize, &cfg.ImageCleanMaxSize, nil)
 	err = setEnvStr(err, EnvImageCleanExemptTags, &cfg.ImageCleanExemptTags)
 	err = setEnvBool(err, EnvImageEnableVolume, &cfg.ImageEnableVolume)
+
 	if err != nil {
 		return cfg, err
 	}
@@ -209,17 +241,39 @@ func setEnvBool(err error, name string, dst *bool) error {
 	return nil
 }
 
-func setEnvUint(err error, name string, dst *uint64) error {
+func setEnvUint(err error, name string, dst *uint64, defaultValue *uint64) error {
 	if err != nil {
 		return err
 	}
+
 	if tmp := os.Getenv(name); tmp != "" {
 		val, err := strconv.ParseUint(tmp, 10, 64)
 		if err != nil {
 			return fmt.Errorf("error invalid %s=%s", name, tmp)
 		}
 		*dst = val
+	} else if defaultValue != nil {
+		*dst = *defaultValue
 	}
+
+	return nil
+}
+
+func setEnvUintPointer(err error, name string, dst **uint64, defaultVal *uint64) error {
+	if err != nil {
+		return err
+	}
+	if tmp, ok := os.LookupEnv(name); ok {
+		val, err := strconv.ParseUint(tmp, 10, 64)
+		if err != nil {
+			return fmt.Errorf("error invalid %s=%s", name, tmp)
+		}
+		*dst = &val
+	} else if defaultVal != nil {
+		// No value found in the environment but a default value is supplied
+		*dst = defaultVal
+	}
+
 	return nil
 }
 

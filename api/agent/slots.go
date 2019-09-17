@@ -58,6 +58,9 @@ type slotQueue struct {
 	signaller chan *slotCaller
 	statsLock sync.Mutex // protects stats below
 	stats     slotQueueStats
+
+	authLock  sync.Mutex
+	authToken string
 }
 
 func NewSlotQueueMgr() *slotQueueMgr {
@@ -247,6 +250,20 @@ func (a *slotQueue) exitContainerState(conType ContainerStateType) {
 	}
 }
 
+func (a *slotQueue) setAuthToken(val string) {
+	a.authLock.Lock()
+	a.authToken = val
+	a.authLock.Unlock()
+}
+
+func (a *slotQueue) getAuthToken() string {
+	var val string
+	a.authLock.Lock()
+	val = a.authToken
+	a.authLock.Unlock()
+	return val
+}
+
 // getSlot must ensure that if it receives a slot, it will be returned, otherwise
 // a container will be locked up forever waiting for slot to free.
 func (a *slotQueueMgr) getSlotQueue(key string) (*slotQueue, bool) {
@@ -281,7 +298,7 @@ var shapool = &sync.Pool{New: func() interface{} { return sha256.New() }}
 
 // TODO do better; once we have app+fn versions this function
 // can be simply app+fn ids & version
-func getSlotQueueKey(call *call) string {
+func getSlotQueueKey(call *call, slotExtns string) string {
 	// return a sha256 hash of a (hopefully) unique string of all the config
 	// values, to make map lookups quicker [than the giant unique string]
 
@@ -349,6 +366,11 @@ func getSlotQueueKey(call *call) string {
 		hash.Write(unsafeBytes("\x00"))
 		v, _ := call.Annotations.Get(k)
 		hash.Write(v)
+		hash.Write(unsafeBytes("\x00"))
+	}
+
+	if slotExtns != "" {
+		hash.Write(unsafeBytes(slotExtns))
 		hash.Write(unsafeBytes("\x00"))
 	}
 
