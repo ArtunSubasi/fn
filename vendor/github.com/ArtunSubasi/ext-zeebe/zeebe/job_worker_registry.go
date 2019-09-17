@@ -22,7 +22,10 @@ func NewJobWorkerRegistry(loadBalancerAddr string, zeebeGatewayAddr string) JobW
 }
 
 func (jobWorkerRegistry *JobWorkerRegistry) RegisterFunctionAsWorker(fnZeebe *FnTriggerWithZeebeJobType) {
-	client, err := zbc.NewZBClient(jobWorkerRegistry.zeebeGatewayAddr)
+	client, err := zbc.NewZBClientWithConfig(&zbc.ZBClientConfig{
+		GatewayAddress: jobWorkerRegistry.zeebeGatewayAddr,
+		UsePlaintextConnection: true}) // TODO make this configurable
+		
 	if err != nil {
 		panic(err)
 	}
