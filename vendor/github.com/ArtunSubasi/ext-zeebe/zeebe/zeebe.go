@@ -6,6 +6,7 @@ import (
 	"github.com/fnproject/fn/fnext"
 	"github.com/sirupsen/logrus"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -44,11 +45,17 @@ func (zeebe *Zeebe) Setup(s fnext.ExtServer) error {
 		return errors.New("Zeebe: The Zeebe Gateway address FN_ZEEBE_GATEWAY_URL ist not configured. The zeebe extension could not start.")
 	}
 
+	usePlaintextConnectionStr := os.Getenv("FN_ZEEBE_USE_PLAINTEXT_CONNECTION")
+	usePlaintextConnection, err := strconv.ParseBool(usePlaintextConnectionStr)
+    if err != nil {
+        usePlaintextConnection = false
+    }
+
 	// This type assertion is hacky. ExtServer should implement the AddFnListener interface.
 	// TODO Get in touch with the Fn Project: Create a feature request, maybe a pull request
 	server := s.(*server.Server)
 
-	jobWorkerRegistry := NewJobWorkerRegistry(loadBalancerAddr, zeebeGatewayAddr)
+	jobWorkerRegistry := NewJobWorkerRegistry(loadBalancerAddr, zeebeGatewayAddr, usePlaintextConnection)
 	server.AddFnListener(&FnListener{&jobWorkerRegistry, apiServerAddr})
 	// TODO we will eventually need an App Listener as well. Because if an App gets deleted, all functions within are deleted as well.
 	// In this case, all Job workers of the app have to be stopped.

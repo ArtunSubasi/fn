@@ -11,20 +11,22 @@ type JobWorkerRegistry struct {
 	jobWorkers map[string]worker.JobWorker // FnID -> JobWorker
 	loadBalancerAddr string
 	zeebeGatewayAddr string
+	usePlaintextConnection bool
 }
 
-func NewJobWorkerRegistry(loadBalancerAddr string, zeebeGatewayAddr string) JobWorkerRegistry {
+func NewJobWorkerRegistry(loadBalancerAddr string, zeebeGatewayAddr string, usePlaintextConnection bool) JobWorkerRegistry {
 	jobWorkerRegistry := JobWorkerRegistry{}
 	jobWorkerRegistry.jobWorkers = make(map[string]worker.JobWorker)
 	jobWorkerRegistry.loadBalancerAddr = loadBalancerAddr
 	jobWorkerRegistry.zeebeGatewayAddr = zeebeGatewayAddr
+	jobWorkerRegistry.usePlaintextConnection = usePlaintextConnection
 	return jobWorkerRegistry
 }
 
 func (jobWorkerRegistry *JobWorkerRegistry) RegisterFunctionAsWorker(fnZeebe *FnTriggerWithZeebeJobType) {
 	client, err := zbc.NewZBClientWithConfig(&zbc.ZBClientConfig{
 		GatewayAddress: jobWorkerRegistry.zeebeGatewayAddr,
-		UsePlaintextConnection: true}) // TODO make this configurable
+		UsePlaintextConnection: jobWorkerRegistry.usePlaintextConnection})
 		
 	if err != nil {
 		panic(err)
